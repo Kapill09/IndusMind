@@ -1,12 +1,8 @@
-import os
 from collections.abc import Sequence
-
-from openai import APIConnectionError, APIStatusError, OpenAI, OpenAIError, RateLimitError
-from openai import AuthenticationError as OpenAIAuthenticationError
+from typing import Any, ClassVar
 
 
-EMBEDDING_MODEL = "text-embedding-3-small"
-OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 
 class EmbeddingServiceError(Exception):
@@ -18,53 +14,45 @@ class EmptyEmbeddingTextError(EmbeddingServiceError):
 
 
 class EmbeddingAuthenticationError(EmbeddingServiceError):
-    """Raised when the OpenAI API key is missing or invalid."""
+    """Reserved for authentication failures in embedding providers."""
 
 
 class EmbeddingRateLimitError(EmbeddingServiceError):
-    """Raised when OpenAI rate limits the embedding request."""
+    """Reserved for rate-limit failures in embedding providers."""
 
 
 class EmbeddingAPIError(EmbeddingServiceError):
-    """Raised when OpenAI cannot generate embeddings for another API reason."""
+    """Raised when the embedding provider cannot generate embeddings."""
 
 
 class EmbeddingService:
-    """Generate OpenAI embeddings for the INDUS MIND RAG pipeline.
+    """Generate local Sentence Transformer embeddings for the INDUS MIND RAG pipeline.
 
     This service has one responsibility: convert validated text into embedding
     vectors. It intentionally does not store vectors, query ChromaDB, retrieve
     documents, or use LangChain.
 
     Args:
-        api_key: Optional OpenAI API key. If omitted, the service reads
-            OPENAI_API_KEY from the environment.
-        model: OpenAI embedding model to use.
-        client: Optional preconfigured OpenAI client, useful for tests.
-
-    Raises:
-        EmbeddingAuthenticationError: If no API key is available.
+        api_key: Accepted for backward compatibility. It is not used by the
+            local Sentence Transformer implementation.
+        model: Sentence Transformer model name to use.
+        client: Optional preloaded Sentence Transformer model, useful for tests.
     """
+
+    _model_cache: ClassVar[dict[str, Any]] = {}
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
         model: str = EMBEDDING_MODEL,
-        client: OpenAI | None = None,
+        client: Any | None = None,
     ) -> None:
-        # Store the model name in one place so future upgrades are controlled.
+        # Keep the constructor compatible with the previous service so callers
+        # do not need to change while the provider is swapped underneath.
+        _ = api_key
         self.model = model
-
-        # Read secrets from environment variables so keys are not hard-coded.
-        resolved_api_key = api_key or os.getenv(OPENAI_API_KEY_ENV)
-        if client is None and not resolved_api_key:
-            raise EmbeddingAuthenticationError(
-                f"Missing OpenAI API key. Set the {OPENAI_API_KEY_ENV} environment variable."
-            )
-
-        # Allow dependency injection in tests while using the official SDK in production.
-        self.client = client or OpenAI(api_key=resolved_api_key)
+        self.client = client or self._get_model(model)
 
     def generate_embedding(self, text: str) -> list[float]:
         """Generate one embedding vector for one text string.
@@ -73,13 +61,11 @@ class EmbeddingService:
             text: Non-empty text to embed.
 
         Returns:
-            The embedding vector exactly as returned by OpenAI.
+            The embedding vector as a Python list of floats.
 
         Raises:
             EmptyEmbeddingTextError: If the text is empty or only whitespace.
-            EmbeddingAuthenticationError: If the API key is invalid.
-            EmbeddingRateLimitError: If OpenAI rate limits the request.
-            EmbeddingAPIError: If another OpenAI API failure occurs.
+            EmbeddingAPIError: If Sentence Transformers cannot generate an embedding.
         """
 
         # Reuse batch generation so single and batch behavior stay consistent.
@@ -92,37 +78,54 @@ class EmbeddingService:
             texts: List of non-empty text strings to embed.
 
         Returns:
-            Embedding vectors in the same order as the input texts, exactly as
-            received from OpenAI.
+            Embedding vectors in the same order as the input texts as Python
+            lists of floats.
 
         Raises:
             EmptyEmbeddingTextError: If the list is empty or contains empty text.
-            EmbeddingAuthenticationError: If the API key is invalid.
-            EmbeddingRateLimitError: If OpenAI rate limits the request.
-            EmbeddingAPIError: If another OpenAI API failure occurs.
+            EmbeddingAPIError: If Sentence Transformers cannot generate embeddings.
         """
 
         clean_texts = self._validate_texts(texts)
 
         try:
-            # One API call for many chunks is faster and cheaper than calling per chunk.
-            response = self.client.embeddings.create(
-                model=self.model,
-                input=clean_texts,
+            embeddings = self.client.encode(
+                clean_texts,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
             )
-        except OpenAIAuthenticationError as exc:
-            raise EmbeddingAuthenticationError("OpenAI API key is invalid or unauthorized.") from exc
-        except RateLimitError as exc:
-            raise EmbeddingRateLimitError("OpenAI rate limit reached while generating embeddings.") from exc
-        except (APIConnectionError, APIStatusError, OpenAIError) as exc:
-            raise EmbeddingAPIError("OpenAI failed to generate embeddings.") from exc
+        except Exception as exc:
+            raise EmbeddingAPIError("Sentence Transformers failed to generate embeddings.") from exc
 
-        # Return only the raw embedding arrays; storage belongs to another service.
-        return [item.embedding for item in response.data]
+        # Sentence Transformers returns a numpy array here; convert it before
+        # leaving the service so downstream code receives plain Python lists.
+        return self._to_python_embeddings(embeddings)
+
+    @classmethod
+    def _get_model(cls, model_name: str) -> Any:
+        """Load and cache the Sentence Transformer model once per process."""
+
+        if model_name not in cls._model_cache:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                raise EmbeddingAPIError(
+                    "sentence-transformers is required for local embeddings."
+                ) from exc
+
+            try:
+                cls._model_cache[model_name] = SentenceTransformer(model_name)
+            except Exception as exc:
+                raise EmbeddingAPIError(
+                    f"Failed to load Sentence Transformer model '{model_name}'."
+                ) from exc
+
+        return cls._model_cache[model_name]
 
     @staticmethod
     def _validate_texts(texts: Sequence[str]) -> list[str]:
-        """Validate embedding input before making a paid external API request."""
+        """Validate embedding input before model inference."""
 
         if not texts:
             raise EmptyEmbeddingTextError("At least one text value is required for embedding.")
@@ -140,3 +143,10 @@ class EmbeddingService:
             clean_texts.append(clean_text)
 
         return clean_texts
+
+    @staticmethod
+    def _to_python_embeddings(embeddings: Any) -> list[list[float]]:
+        """Convert model output into plain Python lists of floats."""
+
+        values = embeddings.tolist() if hasattr(embeddings, "tolist") else embeddings
+        return [[float(value) for value in vector] for vector in values]

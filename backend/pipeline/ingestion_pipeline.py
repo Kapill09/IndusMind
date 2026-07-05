@@ -1,0 +1,165 @@
+from pathlib import Path
+from typing import Protocol, TypedDict, cast
+
+from backend.services.chunking_service import ChunkingError, TextChunk, chunk_pages
+from backend.services.embedding_service import EmbeddingService, EmbeddingServiceError
+from backend.services.pdf_service import PDFPageText, PDFParsingError
+from backend.services.vectordb_service import (
+    COLLECTION_NAME,
+    StoredChunk,
+    VectorDBService,
+    VectorDBServiceError,
+)
+
+
+class PDFService(Protocol):
+    """Minimum PDF service contract required by the ingestion pipeline."""
+
+    def extract_text_from_pdf(self, pdf_path: str | Path) -> list[PDFPageText]:
+        """Extract page-wise text from a PDF file."""
+
+
+class IngestionSummary(TypedDict):
+    """Structured result returned after a document is ingested."""
+
+    filename: str
+    pages: int
+    chunks: int
+    vectors: int
+    collection: str
+    success: bool
+
+
+class IngestionPipelineError(Exception):
+    """Base exception for ingestion pipeline failures."""
+
+
+class IngestionValidationError(IngestionPipelineError):
+    """Raised when the input document cannot be ingested."""
+
+
+class IngestionExtractionError(IngestionPipelineError):
+    """Raised when the PDF text extraction step fails."""
+
+
+class IngestionChunkingError(IngestionPipelineError):
+    """Raised when extracted text cannot be chunked."""
+
+
+class IngestionEmbeddingError(IngestionPipelineError):
+    """Raised when chunk embeddings cannot be generated."""
+
+
+class IngestionStorageError(IngestionPipelineError):
+    """Raised when chunks and embeddings cannot be stored."""
+
+
+class IngestionPipeline:
+    """Orchestrate PDF ingestion for the INDUS MIND RAG system.
+
+    The pipeline coordinates existing services. It intentionally avoids parsing
+    PDFs, splitting text, generating embeddings inside ChromaDB, or writing
+    vector database logic here.
+    """
+
+    def __init__(
+        self,
+        pdf_service: PDFService,
+        embedding_service: EmbeddingService,
+        vectordb_service: VectorDBService,
+    ) -> None:
+        # Services are injected so the pipeline is easy to test and replace.
+        self.pdf_service = pdf_service
+        self.embedding_service = embedding_service
+        self.vectordb_service = vectordb_service
+
+    def ingest_document(self, pdf_path: str | Path) -> IngestionSummary:
+        """Ingest one PDF into the industrial knowledge ChromaDB collection."""
+
+        path = self._validate_pdf_path(pdf_path)
+        document_id = path.stem
+
+        try:
+            # Step 1: Extract page text so downstream stages work with plain text.
+            pages = self.pdf_service.extract_text_from_pdf(path)
+            print("PDF extracted")
+        except (FileNotFoundError, PDFParsingError) as exc:
+            raise IngestionExtractionError(f"Failed to extract text from '{path.name}'.") from exc
+
+        if not pages:
+            raise IngestionValidationError(f"PDF '{path.name}' did not contain any pages.")
+
+        try:
+            # Step 2: Chunk pages so retrieval can find focused, relevant passages.
+            chunks = chunk_pages(
+                pages,
+                document_id=document_id,
+                metadata={"filename": path.name},
+            )
+            print("Chunking completed")
+        except ChunkingError as exc:
+            raise IngestionChunkingError(f"Failed to chunk '{path.name}'.") from exc
+
+        if not chunks:
+            raise IngestionValidationError(f"PDF '{path.name}' did not contain extractable text.")
+
+        try:
+            # Step 3: Generate embeddings for chunks before storage; ChromaDB
+            # receives vectors but does not create them in this architecture.
+            embeddings = self.embedding_service.generate_embeddings(
+                [chunk["text"] for chunk in chunks]
+            )
+            print("Embeddings generated")
+        except EmbeddingServiceError as exc:
+            raise IngestionEmbeddingError(f"Failed to embed chunks from '{path.name}'.") from exc
+
+        stored_chunks = self._to_stored_chunks(chunks)
+
+        try:
+            # Step 4: Store chunk text, metadata, and precomputed vectors together.
+            vector_count = self.vectordb_service.add_chunks(stored_chunks, embeddings)
+            print("Vectors stored")
+        except VectorDBServiceError as exc:
+            raise IngestionStorageError(f"Failed to store vectors for '{path.name}'.") from exc
+
+        # Step 5: Return counts that callers can log, display, or assert in tests.
+        return {
+            "filename": path.name,
+            "pages": len(pages),
+            "chunks": len(chunks),
+            "vectors": vector_count,
+            "collection": getattr(self.vectordb_service, "collection_name", COLLECTION_NAME),
+            "success": True,
+        }
+
+    @staticmethod
+    def _validate_pdf_path(pdf_path: str | Path) -> Path:
+        """Normalize and validate the requested PDF path before ingestion starts."""
+
+        path = Path(pdf_path)
+        if not path.exists():
+            raise IngestionValidationError(f"PDF file not found: {path}")
+        if not path.is_file():
+            raise IngestionValidationError(f"PDF path is not a file: {path}")
+        if path.suffix.lower() != ".pdf":
+            raise IngestionValidationError(f"Expected a .pdf file, got: {path.name}")
+
+        return path
+
+    @staticmethod
+    def _to_stored_chunks(chunks: list[TextChunk]) -> list[StoredChunk]:
+        """Keep only the fields ChromaDB storage expects."""
+
+        return [
+            cast(
+                StoredChunk,
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "text": chunk["text"],
+                    "page_start": chunk["page_start"],
+                    "page_end": chunk["page_end"],
+                    "metadata": chunk["metadata"],
+                },
+            )
+            for chunk in chunks
+        ]

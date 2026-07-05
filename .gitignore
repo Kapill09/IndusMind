@@ -1,0 +1,25 @@
+# Environment
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# ChromaDB
+data/chroma/
+
+# Uploaded PDFs
+data/raw/
+
+# SQLite
+*.sqlite3
+
+# Logs
+*.log
+
+# macOS
+.DS_Store

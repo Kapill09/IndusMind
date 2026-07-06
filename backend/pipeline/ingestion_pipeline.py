@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path
+from time import perf_counter
 from typing import Protocol, TypedDict, cast
 
 from backend.services.chunking_service import ChunkingError, TextChunk, chunk_pages
@@ -10,6 +12,9 @@ from backend.services.vectordb_service import (
     VectorDBService,
     VectorDBServiceError,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class PDFService(Protocol):
@@ -78,11 +83,20 @@ class IngestionPipeline:
 
         path = self._validate_pdf_path(pdf_path)
         document_id = path.stem
+        pipeline_started_at = perf_counter()
+
+        logger.info("Starting ingestion: filename=%s document_id=%s", path.name, document_id)
 
         try:
             # Step 1: Extract page text so downstream stages work with plain text.
+            started_at = perf_counter()
             pages = self.pdf_service.extract_text_from_pdf(path)
-            print("PDF extracted")
+            logger.info(
+                "PDF extracted: filename=%s pages=%s latency_ms=%s",
+                path.name,
+                len(pages),
+                int((perf_counter() - started_at) * 1000),
+            )
         except (FileNotFoundError, PDFParsingError) as exc:
             raise IngestionExtractionError(f"Failed to extract text from '{path.name}'.") from exc
 
@@ -91,12 +105,18 @@ class IngestionPipeline:
 
         try:
             # Step 2: Chunk pages so retrieval can find focused, relevant passages.
+            started_at = perf_counter()
             chunks = chunk_pages(
                 pages,
                 document_id=document_id,
                 metadata={"filename": path.name},
             )
-            print("Chunking completed")
+            logger.info(
+                "Chunking completed: filename=%s chunks=%s latency_ms=%s",
+                path.name,
+                len(chunks),
+                int((perf_counter() - started_at) * 1000),
+            )
         except ChunkingError as exc:
             raise IngestionChunkingError(f"Failed to chunk '{path.name}'.") from exc
 
@@ -106,10 +126,16 @@ class IngestionPipeline:
         try:
             # Step 3: Generate embeddings for chunks before storage; ChromaDB
             # receives vectors but does not create them in this architecture.
+            started_at = perf_counter()
             embeddings = self.embedding_service.generate_embeddings(
                 [chunk["text"] for chunk in chunks]
             )
-            print("Embeddings generated")
+            logger.info(
+                "Embeddings generated: filename=%s vectors=%s latency_ms=%s",
+                path.name,
+                len(embeddings),
+                int((perf_counter() - started_at) * 1000),
+            )
         except EmbeddingServiceError as exc:
             raise IngestionEmbeddingError(f"Failed to embed chunks from '{path.name}'.") from exc
 
@@ -117,10 +143,25 @@ class IngestionPipeline:
 
         try:
             # Step 4: Store chunk text, metadata, and precomputed vectors together.
+            started_at = perf_counter()
             vector_count = self.vectordb_service.add_chunks(stored_chunks, embeddings)
-            print("Vectors stored")
+            logger.info(
+                "Vectors stored: filename=%s vectors=%s latency_ms=%s",
+                path.name,
+                vector_count,
+                int((perf_counter() - started_at) * 1000),
+            )
         except VectorDBServiceError as exc:
             raise IngestionStorageError(f"Failed to store vectors for '{path.name}'.") from exc
+
+        logger.info(
+            "Ingestion completed: filename=%s pages=%s chunks=%s vectors=%s total_latency_ms=%s",
+            path.name,
+            len(pages),
+            len(chunks),
+            vector_count,
+            int((perf_counter() - pipeline_started_at) * 1000),
+        )
 
         # Step 5: Return counts that callers can log, display, or assert in tests.
         return {

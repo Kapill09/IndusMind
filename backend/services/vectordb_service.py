@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -6,6 +7,7 @@ import chromadb
 
 COLLECTION_NAME = "industrial_knowledge"
 DEFAULT_CHROMA_PATH = Path(__file__).resolve().parents[2] / "data" / "chroma"
+logger = logging.getLogger(__name__)
 
 
 class StoredChunk(TypedDict):
@@ -114,14 +116,25 @@ class VectorDBService:
         except Exception as exc:
             raise VectorDBOperationError("Failed to store chunks in ChromaDB.") from exc
 
+        logger.info(
+            "Chroma upsert completed: collection=%s chunks=%s",
+            self.collection_name,
+            len(chunks),
+        )
         return len(chunks)
 
-    def search(self, query_embedding: list[float], top_k: int = 5) -> list[VectorSearchResult]:
+    def search(
+        self,
+        query_embedding: list[float],
+        top_k: int = 5,
+        where: dict[str, Any] | None = None,
+    ) -> list[VectorSearchResult]:
         """Search ChromaDB using a precomputed query embedding.
 
         Args:
             query_embedding: Embedding vector for the user query.
             top_k: Maximum number of nearest chunks to return.
+            where: Optional Chroma metadata filter.
 
         Returns:
             A list of nearest ChromaDB records with text, metadata, and distance.
@@ -137,15 +150,53 @@ class VectorDBService:
 
         try:
             # Query by embedding only; embedding generation belongs to another service.
-            results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=top_k,
-                include=["documents", "metadatas", "distances"],
-            )
+            query_args: dict[str, Any] = {
+                "query_embeddings": [query_embedding],
+                "n_results": top_k,
+                "include": ["documents", "metadatas", "distances"],
+            }
+            if where:
+                query_args["where"] = where
+
+            results = self.collection.query(**query_args)
         except Exception as exc:
             raise VectorDBOperationError("Failed to search ChromaDB collection.") from exc
 
-        return self._format_search_results(results)
+        formatted = self._format_search_results(results)
+        logger.info(
+            "Chroma search completed: collection=%s top_k=%s results=%s filtered=%s",
+            self.collection_name,
+            top_k,
+            len(formatted),
+            bool(where),
+        )
+        return formatted
+
+    def get_chunks(self, limit: int | None = None) -> list[VectorSearchResult]:
+        """Return stored chunks with text and metadata for local hybrid scoring."""
+
+        if limit is not None and limit <= 0:
+            raise VectorDBValidationError("limit must be greater than 0.")
+
+        try:
+            get_args: dict[str, Any] = {
+                "include": ["documents", "metadatas"],
+            }
+            if limit is not None:
+                get_args["limit"] = limit
+
+            results = self.collection.get(**get_args)
+        except Exception as exc:
+            raise VectorDBOperationError("Failed to read chunks from ChromaDB collection.") from exc
+
+        formatted = self._format_get_results(results)
+        logger.info(
+            "Chroma get completed: collection=%s limit=%s results=%s",
+            self.collection_name,
+            limit,
+            len(formatted),
+        )
+        return formatted
 
     def delete_document(self, document_id: str) -> None:
         """Delete all chunks for one source document from ChromaDB.
@@ -262,6 +313,20 @@ class VectorDBService:
                 f"Chunk '{chunk['chunk_id']}' is missing metadata fields: {', '.join(missing_fields)}."
             )
 
+        optional_fields = (
+            "heading",
+            "title",
+            "problem_statement_number",
+            "section_number",
+            "chapter_number",
+            "figure_number",
+            "table_number",
+        )
+        for field in optional_fields:
+            value = VectorDBService._metadata_scalar(source_metadata.get(field))
+            if value is not None:
+                metadata[field] = value
+
         return metadata
 
     @staticmethod
@@ -274,6 +339,21 @@ class VectorDBService:
             return int(value)
         except (TypeError, ValueError):
             return -1
+
+    @staticmethod
+    def _metadata_scalar(value: Any) -> str | int | float | bool | None:
+        """Return a Chroma-safe scalar metadata value when one is available."""
+
+        if value is None:
+            return None
+        if isinstance(value, bool | int | float):
+            return value
+
+        clean_value = str(value).strip()
+        if not clean_value:
+            return None
+
+        return clean_value[:500]
 
     @staticmethod
     def _format_search_results(results: dict[str, Any]) -> list[VectorSearchResult]:
@@ -292,6 +372,28 @@ class VectorDBService:
                     "chunk_id": chunk_id,
                     "text": documents[index] if index < len(documents) else "",
                     "distance": distances[index] if index < len(distances) else None,
+                    "metadata": metadata,
+                }
+            )
+
+        return formatted_results
+
+    @staticmethod
+    def _format_get_results(results: dict[str, Any]) -> list[VectorSearchResult]:
+        """Convert Chroma's get response into vector-search-shaped records."""
+
+        ids = results.get("ids", []) or []
+        documents = results.get("documents", []) or []
+        metadatas = results.get("metadatas", []) or []
+
+        formatted_results: list[VectorSearchResult] = []
+        for index, chunk_id in enumerate(ids):
+            metadata = metadatas[index] or {}
+            formatted_results.append(
+                {
+                    "chunk_id": chunk_id,
+                    "text": documents[index] if index < len(documents) else "",
+                    "distance": None,
                     "metadata": metadata,
                 }
             )

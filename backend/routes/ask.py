@@ -4,14 +4,17 @@ from time import perf_counter
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.services.embedding_service import EmbeddingService
-from backend.services.retrieval_service import (
-    RetrievalEmbeddingError,
-    RetrievalSearchError,
-    RetrievalService,
-    RetrievalValidationError,
+from backend.pipeline.rag_pipeline import (
+    RAGPipeline,
+    RAGPipelineGenerationError,
+    RAGPipelineRetrievalError,
+    RAGPipelineValidationError,
 )
+
+from backend.services.embedding_service import EmbeddingService
 from backend.services.vectordb_service import VectorDBService
+from backend.services.retrieval_service import RetrievalService
+from backend.services.llm_service import LLMService
 
 
 # -----------------------------
@@ -54,10 +57,19 @@ class AskRequest(BaseModel):
 # Create these once so the embedding model and ChromaDB collection are reused
 # across requests instead of being reinitialized for every question.
 embedding_service = EmbeddingService()
+
 vectordb_service = VectorDBService()
+
 retrieval_service = RetrievalService(
     embedding_service=embedding_service,
     vectordb_service=vectordb_service,
+)
+
+llm_service = LLMService()
+
+rag_pipeline = RAGPipeline(
+    retrieval_service=retrieval_service,
+    llm_service=llm_service,
 )
 
 
@@ -70,8 +82,7 @@ retrieval_service = RetrievalService(
     summary="Retrieve Relevant Industrial Knowledge",
     description=(
         "Accepts a user question, embeds it with the existing embedding service, "
-        "searches the ChromaDB knowledge base, and returns the top matching chunks. "
-        "This endpoint performs retrieval only and does not generate an LLM answer."
+        "searches the ChromaDB knowledge base, and generates a grounded Gemini answer."
     ),
     responses={
         200: {
@@ -110,30 +121,39 @@ async def ask_question(request: AskRequest):
     start_time = perf_counter()
 
     try:
-        retrieval = retrieval_service.retrieve(
+        response = rag_pipeline.ask(
             question=request.question,
             top_k=request.top_k,
         )
-    except RetrievalValidationError as exc:
+    except RAGPipelineValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RetrievalEmbeddingError as exc:
-        logger.exception("Question embedding failed.")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to generate question embedding.",
-        ) from exc
-    except RetrievalSearchError as exc:
-        logger.exception("Vector retrieval failed.")
+    except RAGPipelineRetrievalError as exc:
+        logger.exception("Retrieval failed for question.")
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve relevant chunks.",
         ) from exc
+    except RAGPipelineGenerationError as exc:
+        logger.exception("Answer generation failed for question.")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate an answer.",
+        ) from exc
 
-    retrieval_time_ms = int((perf_counter() - start_time) * 1000)
+    total_time_ms = int((perf_counter() - start_time) * 1000)
+    logger.info(
+        "Ask request completed: top_k=%s sources=%s total_latency_ms=%s",
+        request.top_k,
+        len(response["sources"]),
+        total_time_ms,
+    )
 
     return {
         "success": True,
-        "question": retrieval["question"],
-        "retrieval_time_ms": retrieval_time_ms,
-        "results": retrieval["results"],
+        "question": response["question"],
+        "answer": response["answer"],
+        "model": response["model"],
+        "retrieval_time_ms": total_time_ms,
+        "total_results": len(response["retrieval"]["results"]),
+        "sources": response["sources"],
     }

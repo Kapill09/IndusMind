@@ -1,7 +1,12 @@
+import logging
+from time import perf_counter
 from typing import Any, TypedDict
 
 from backend.services.llm_service import LLMService, LLMServiceError
 from backend.services.retrieval_service import RetrievalService, RetrievalServiceError
+
+
+logger = logging.getLogger(__name__)
 
 
 class RAGSource(TypedDict):
@@ -79,13 +84,21 @@ class RAGPipeline:
 
         clean_question = self._validate_question(question)
         clean_top_k = self._validate_top_k(top_k)
+        started_at = perf_counter()
 
         try:
             # RetrievalService handles embeddings and vector search through its
             # own dependencies; the pipeline only coordinates the call.
+            retrieval_started_at = perf_counter()
             retrieval = self.retrieval_service.retrieve(
                 question=clean_question,
                 top_k=clean_top_k,
+            )
+            logger.info(
+                "RAG retrieval completed: top_k=%s results=%s latency_ms=%s",
+                clean_top_k,
+                len(retrieval.get("results", [])),
+                int((perf_counter() - retrieval_started_at) * 1000),
             )
         except RetrievalServiceError as exc:
             raise RAGPipelineRetrievalError("Failed to retrieve context for the question.") from exc
@@ -95,24 +108,32 @@ class RAGPipeline:
         try:
             # LLMService receives the retrieved chunks and owns all prompt and
             # Gemini-specific answer generation behavior.
+            generation_started_at = perf_counter()
             llm_response = self.llm_service.generate_answer(
                 question=retrieval["question"],
                 retrieved_chunks=retrieved_chunks,
             )
+            logger.info(
+                "RAG generation completed: context_chunks=%s latency_ms=%s",
+                len(retrieved_chunks),
+                int((perf_counter() - generation_started_at) * 1000),
+            )
         except LLMServiceError as exc:
             raise RAGPipelineGenerationError("Failed to generate an answer from retrieved context.") from exc
+
+        logger.info(
+            "RAG request completed: top_k=%s total_latency_ms=%s",
+            clean_top_k,
+            int((perf_counter() - started_at) * 1000),
+        )
 
         return {
             "question": retrieval["question"],
             "answer": str(llm_response["answer"]),
             "retrieval": retrieval,
-
             "model": str(llm_response["model"]),
-            
             "context_chunks": len(retrieved_chunks),
-            
             "sources": self._build_sources(retrieved_chunks),
-            
             "success": True,
         }
 
@@ -142,9 +163,8 @@ class RAGPipeline:
 
         if top_k > 20:
             raise RAGPipelineValidationError(
-            "top_k cannot exceed 20."
-        )
-            raise RAGPipelineValidationError("top_k must be greater than 0.")
+                "top_k cannot exceed 20."
+            )
 
         return top_k
 

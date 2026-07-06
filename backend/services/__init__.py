@@ -23,6 +23,11 @@ from backend.services.pdf_service import (
     PDFService,
 )
 
+from backend.services.query_analyzer import (
+    QueryAnalyzer,
+    StructuredQuery,
+)
+
 from backend.services.vectordb_service import (
     COLLECTION_NAME,
     DEFAULT_CHROMA_PATH,
@@ -47,6 +52,10 @@ __all__ = [
     "PDFPageText",
     "PDFParsingError",
     "PDFService",
+
+    # Query analysis
+    "QueryAnalyzer",
+    "StructuredQuery",
 
     # Embeddings
     "EMBEDDING_MODEL",

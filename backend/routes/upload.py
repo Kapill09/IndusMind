@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+from time import perf_counter
 
 from fastapi import APIRouter, HTTPException, UploadFile
 
@@ -53,11 +54,13 @@ ingestion_pipeline = IngestionPipeline(
     description="Upload manuals, SOPs, maintenance logs and automatically ingest them into the RAG knowledge base.",
 )
 async def upload_pdf(file: UploadFile):
+    started_at = perf_counter()
+    filename = file.filename or ""
 
     # Validate uploaded file.
     if (
         file.content_type != "application/pdf"
-        and not file.filename.lower().endswith(".pdf")
+        and not filename.lower().endswith(".pdf")
     ):
         raise HTTPException(
             status_code=400,
@@ -65,15 +68,14 @@ async def upload_pdf(file: UploadFile):
         )
 
     # Safe filename prevents directory traversal.
-    safe_filename = Path(file.filename).name
-
-    print("=" * 60)
-    print("UPLOAD ENDPOINT HIT")
-    print(f"File: {safe_filename}")
+    safe_filename = Path(filename).name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must have a filename.")
 
     file_path = RAW_DATA_DIR / safe_filename
 
     file_size = 0
+    logger.info("Upload started: filename=%s content_type=%s", safe_filename, file.content_type)
 
     # Save uploaded PDF.
     with file_path.open("wb") as saved_file:
@@ -83,10 +85,7 @@ async def upload_pdf(file: UploadFile):
 
     # Automatically process the uploaded PDF.
     try:
-        print("Starting ingestion pipeline...")
         summary = ingestion_pipeline.ingest_document(file_path)
-        print("Pipeline completed successfully")
-        print(summary)
 
     except IngestionPipelineError as exc:
         logger.exception("PDF ingestion failed for %s", safe_filename)
@@ -94,6 +93,15 @@ async def upload_pdf(file: UploadFile):
             status_code=500,
             detail=str(exc),
         ) from exc
+
+    total_time_ms = int((perf_counter() - started_at) * 1000)
+    logger.info(
+        "Upload completed: filename=%s size_bytes=%s chunks=%s total_latency_ms=%s",
+        safe_filename,
+        file_size,
+        summary["chunks"],
+        total_time_ms,
+    )
 
     return {
         "success": True,

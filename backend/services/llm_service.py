@@ -1,5 +1,7 @@
+import logging
 import os
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from dotenv import load_dotenv
@@ -9,6 +11,10 @@ from google import genai
 GEMINI_MODEL = "gemini-2.5-flash"
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 FALLBACK_ANSWER = "I couldn't find this information in the uploaded industrial documents."
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+load_dotenv(ENV_FILE)
+logger = logging.getLogger(__name__)
 
 
 class LLMServiceError(Exception):
@@ -85,7 +91,12 @@ class LLMService:
 
         clean_question = self._validate_question(question)
         clean_chunks = self._validate_chunks(retrieved_chunks)
+        if not clean_chunks:
+            logger.info("LLM generation skipped because no retrieved context was provided.")
+            return self._fallback_response()
+
         prompt = self._build_prompt(clean_question, clean_chunks)
+        started_at = perf_counter()
 
         try:
             # The LLM receives only the question and retrieved context. Retrieval,
@@ -93,12 +104,13 @@ class LLMService:
             from google.genai import types
 
             response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-            temperature=0.2,
-            ),
-        )
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=700,
+                ),
+            )
         except Exception as exc:
             raise LLMGenerationError("Gemini failed to generate an answer.") from exc
 
@@ -106,20 +118,27 @@ class LLMService:
         if not answer:
             raise LLMGenerationError("Gemini returned an empty answer.")
 
+        logger.info(
+            "LLM generation completed: model=%s context_chunks=%s latency_ms=%s",
+            self.model,
+            len(clean_chunks),
+            int((perf_counter() - started_at) * 1000),
+        )
+
         return {
             "answer": answer,
             "model": self.model,
             "context_chunks": len(clean_chunks),
             "sources": [
-            {   
-                "chunk_id": c["chunk_id"],
-                "page_start": c["page_start"],
-                "page_end": c["page_end"],
-            }
-        for c in clean_chunks
-        ],
-        "success": True,
-    }
+                {
+                    "chunk_id": c.get("chunk_id"),
+                    "page_start": c.get("page_start"),
+                    "page_end": c.get("page_end"),
+                }
+                for c in clean_chunks
+            ],
+            "success": True,
+        }
 
     @staticmethod
     def _validate_question(question: str) -> str:
@@ -164,7 +183,6 @@ class LLMService:
         )
         return f"""You are INDUS MIND, an AI assistant specialized in industrial maintenance, equipment manuals, SOPs, inspection reports, troubleshooting guides, and operational procedures.
 
-
 Use only the provided context to answer the user's question.
 
 
@@ -175,9 +193,11 @@ SYSTEM INSTRUCTIONS
 3. Never invent or assume information.
 4. If the answer cannot be found in the provided context, reply exactly:
    "{FALLBACK_ANSWER}"
-5. Mention page numbers whenever they are available.
-6. Use bullet points whenever appropriate.
-7. Keep answers concise, professional, and technically accurate.
+5. Keep the answer concise: one short paragraph or up to five bullets.
+6. Add citations after factual claims using this format: [source: <chunk_id>, page <page-or-range>].
+7. Do not cite sources that are not present in the retrieved context.
+8. If context is partial, state only what is supported and do not fill gaps.
+9. If the retrieved context contains conflicting information, clearly state that the documents contain conflicting guidance instead of choosing one.
 
 User Question:
 {question}
@@ -199,6 +219,17 @@ Answer:
         text = str(chunk.get("text", "")).strip()
 
         return f"[Context Chunk {index} | chunk_id={chunk_id} | {page_label}]\n{text}"
+
+    def _fallback_response(self) -> dict:
+        """Return the standard grounded fallback without calling the model."""
+
+        return {
+            "answer": FALLBACK_ANSWER,
+            "model": self.model,
+            "context_chunks": 0,
+            "sources": [],
+            "success": True,
+        }
 
     @staticmethod
     def _page_label(page_start: Any, page_end: Any) -> str:

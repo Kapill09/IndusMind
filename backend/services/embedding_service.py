@@ -1,8 +1,11 @@
+import logging
 from collections.abc import Sequence
+from time import perf_counter
 from typing import Any, ClassVar
 
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingServiceError(Exception):
@@ -87,6 +90,7 @@ class EmbeddingService:
         """
 
         clean_texts = self._validate_texts(texts)
+        started_at = perf_counter()
 
         try:
             embeddings = self.client.encode(
@@ -97,6 +101,13 @@ class EmbeddingService:
             )
         except Exception as exc:
             raise EmbeddingAPIError("Sentence Transformers failed to generate embeddings.") from exc
+
+        logger.info(
+            "Embeddings generated: model=%s texts=%s latency_ms=%s",
+            self.model,
+            len(clean_texts),
+            int((perf_counter() - started_at) * 1000),
+        )
 
         # Sentence Transformers returns a numpy array here; convert it before
         # leaving the service so downstream code receives plain Python lists.

@@ -1,0 +1,312 @@
+import logging
+import re
+from collections import defaultdict
+from typing import Any
+
+from backend.services.document_service import DocumentService, DocumentServiceError
+
+logger = logging.getLogger(__name__)
+
+ENTITY_PATTERNS = {
+    "Equipment": [
+        r"\b(pump|compressor|valve|motor|gearbox|turbine|reactor|boiler|conveyor|generator|sensor|controller|actuator|vessel|pipeline|drill|engine)\b",
+        r"\b(equipment|machine|system|assembly)\b",
+    ],
+    "Problem Statements": [
+        r"\b(problem statement|ps\s*\d+|problem\s*no\.?\s*\d+)\b",
+        r"\b(issue|fault|failure|breakdown|malfunction|defect)\b",
+    ],
+    "SOPs": [
+        r"\b(sop|standard operating procedure|procedure|work instruction)\b",
+    ],
+    "Technologies": [
+        r"\b(iot|ai|ml|predictive maintenance|condition monitoring|digital twin|scada|plc|robotics|automation)\b",
+    ],
+    "Safety terms": [
+        r"\b(safety|hazard|risk|lockout|tagout|ppe|incident|accident|emergency)\b",
+    ],
+    "Standards": [
+        r"\b(iso|iec|api|ansi|astm|osha|nfpa|ieee)\b",
+    ],
+    "Regulations": [
+        r"\b(regulation|compliance|regulatory|code|permit|license)\b",
+    ],
+    "Maintenance concepts": [
+        r"\b(maintenance|inspection|lubrication|calibration|overhaul|repair|downtime|preventive|predictive)\b",
+    ],
+}
+
+
+class KnowledgeGraphServiceError(Exception):
+    """Base exception for knowledge graph service errors."""
+
+
+class KnowledgeGraphService:
+    """Build a lightweight knowledge graph from indexed document chunks."""
+
+    def __init__(self, document_service: DocumentService | None = None) -> None:
+        self.document_service = document_service or DocumentService()
+        self.compiled_entity_patterns = self._compile_entity_patterns()
+
+    def build_graph(self) -> dict[str, list[dict[str, Any]]]:
+        """Construct a JSON graph with nodes and edges derived from indexed chunks."""
+
+        try:
+            documents = self.document_service.list_documents()
+        except DocumentServiceError as exc:
+            logger.exception("Failed to load documents for knowledge graph")
+            raise KnowledgeGraphServiceError("Unable to build the knowledge graph from indexed documents.") from exc
+
+        try:
+            chunks = self.document_service.vectordb_service.get_chunks()
+        except Exception as exc:
+            logger.exception("Failed to read chunks for knowledge graph")
+            raise KnowledgeGraphServiceError("Unable to read vector chunks for knowledge graph construction.") from exc
+
+        nodes_by_id: dict[str, dict[str, Any]] = {}
+        edges: list[dict[str, Any]] = []
+        node_index: dict[tuple[str, str], str] = {}
+
+        for document in documents:
+            document_id = str(document.get("document_id", "")).strip()
+            if not document_id:
+                continue
+            node_id = self._make_node_id("document", document_id)
+            nodes_by_id[node_id] = {
+                "id": node_id,
+                "label": str(document.get("filename") or document_id),
+                "type": "Document",
+                "page": None,
+                "document": document_id,
+                "description": f"Indexed industrial document with {document.get('chunks', 0)} chunks.",
+            }
+            node_index[("document", document_id)] = node_id
+
+        for chunk in chunks:
+            metadata = chunk.get("metadata") or {}
+            document_id = str(metadata.get("document_id", "")).strip()
+            filename = str(metadata.get("filename") or "unknown.pdf")
+            page = metadata.get("page_start")
+            text = str(chunk.get("text", "")).strip()
+            chunk_id = str(chunk.get("chunk_id", "")).strip()
+
+            if document_id:
+                self._ensure_node(
+                    nodes_by_id,
+                    node_index,
+                    node_type="Document",
+                    identifier=document_id,
+                    label=filename,
+                    page=None,
+                    document=document_id,
+                    description="Indexed source document",
+                )
+
+            entity_nodes = self._extract_entities(text, metadata, document_id, page)
+            for entity_node in entity_nodes:
+                self._upsert_node(nodes_by_id, node_index, entity_node)
+                self._add_edge(
+                    edges,
+                    source_id=node_index[("document", document_id)] if document_id and ("document", document_id) in node_index else None,
+                    target_id=entity_node["id"],
+                    relationship="mentions",
+                    weight=1.0,
+                )
+
+            if document_id:
+                document_node_id = node_index[("document", document_id)]
+                page_node_id = self._make_node_id("page", f"{document_id}:{page}") if page is not None else None
+                if page_node_id is not None:
+                    self._ensure_node(
+                        nodes_by_id,
+                        node_index,
+                        node_type="Page",
+                        identifier=f"{document_id}:{page}",
+                        label=f"Page {page}",
+                        page=page,
+                        document=document_id,
+                        description="Page-level knowledge context",
+                    )
+                    self._add_edge(edges, document_node_id, page_node_id, "references", 1.0)
+                    self._add_edge(edges, page_node_id, document_node_id, "belongs_to", 0.8)
+
+                self._add_edge(edges, document_node_id, document_node_id, "same_document", 0.7)
+
+            if document_id and chunk_id:
+                self._add_edge(edges, self._make_node_id("chunk", chunk_id), self._make_node_id("document", document_id), "references", 0.9)
+
+        self._connect_related_entities(nodes_by_id, edges)
+
+        return {
+            "nodes": list(nodes_by_id.values()),
+            "edges": edges,
+        }
+
+    def _extract_entities(self, text: str, metadata: dict[str, Any], document_id: str, page: Any) -> list[dict[str, Any]]:
+        """Extract typed entities from text and metadata using heuristic patterns."""
+
+        entities: list[dict[str, Any]] = []
+        labels: set[str] = set()
+
+        for entity_type, patterns in self.compiled_entity_patterns.items():
+            for compiled_pattern in patterns:
+                matches = compiled_pattern.finditer(text)
+                for match in matches:
+                    label = match.group(0).strip()
+                    if label.lower() in {"equipment", "machine", "system", "assembly"}:
+                        label = label.title()
+                    if label in labels:
+                        continue
+                    labels.add(label)
+                    entity_id = self._make_node_id(entity_type.lower().replace(" ", "_"), f"{document_id}:{label}:{page}")
+                    entities.append(
+                        {
+                            "id": entity_id,
+                            "label": label,
+                            "type": entity_type,
+                            "page": page,
+                            "document": document_id,
+                            "description": f"Extracted {entity_type.lower()} reference from the indexed document.",
+                        }
+                    )
+
+        if metadata.get("problem_statement_number"):
+            label = f"Problem Statement {metadata['problem_statement_number']}"
+            entity_id = self._make_node_id("problem_statement", f"{document_id}:{label}")
+            entities.append(
+                {
+                    "id": entity_id,
+                    "label": label,
+                    "type": "Problem Statements",
+                    "page": page,
+                    "document": document_id,
+                    "description": "Problem statement reference from document metadata.",
+                }
+            )
+
+        if metadata.get("heading"):
+            label = str(metadata["heading"])
+            entity_id = self._make_node_id("heading", f"{document_id}:{label}")
+            entities.append(
+                {
+                    "id": entity_id,
+                    "label": label,
+                    "type": "SOPs",
+                    "page": page,
+                    "document": document_id,
+                    "description": "Heading or section reference extracted from metadata.",
+                }
+            )
+
+        return entities
+
+    def _compile_entity_patterns(self) -> dict[str, list[re.Pattern[str]]]:
+        """Compile every entity regex during initialization and fail early on invalid patterns."""
+
+        compiled_patterns: dict[str, list[re.Pattern[str]]] = {}
+        for entity_type, patterns in ENTITY_PATTERNS.items():
+            compiled_collection: list[re.Pattern[str]] = []
+            for pattern in patterns:
+                try:
+                    compiled_collection.append(re.compile(pattern, flags=re.IGNORECASE))
+                except re.error as exc:
+                    raise KnowledgeGraphServiceError(
+                        f"Invalid knowledge graph regex for '{entity_type}': {pattern}"
+                    ) from exc
+            compiled_patterns[entity_type] = compiled_collection
+
+        return compiled_patterns
+
+    def _connect_related_entities(self, nodes_by_id: dict[str, dict[str, Any]], edges: list[dict[str, Any]]) -> None:
+        """Link entities that share the same document or type to support graph exploration."""
+
+        by_document: dict[str, list[str]] = defaultdict(list)
+        by_type: dict[str, list[str]] = defaultdict(list)
+
+        for node_id, node in nodes_by_id.items():
+            document = node.get("document")
+            if document:
+                by_document[document].append(node_id)
+            node_type = node.get("type")
+            if node_type:
+                by_type[node_type].append(node_id)
+
+        for document_id, node_ids in by_document.items():
+            if len(node_ids) < 2:
+                continue
+            for source_id in node_ids:
+                for target_id in node_ids:
+                    if source_id == target_id:
+                        continue
+                    self._add_edge(edges, source_id, target_id, "related_to", 0.6)
+
+        for node_type, node_ids in by_type.items():
+            if len(node_ids) < 2:
+                continue
+            for source_id in node_ids[:10]:
+                for target_id in node_ids[:10]:
+                    if source_id == target_id:
+                        continue
+                    self._add_edge(edges, source_id, target_id, "related_to", 0.4)
+
+    def _upsert_node(self, nodes_by_id: dict[str, dict[str, Any]], node_index: dict[tuple[str, str], str], node: dict[str, Any]) -> None:
+        """Insert or update a node in the graph."""
+
+        node_id = node["id"]
+        if node_id not in nodes_by_id:
+            nodes_by_id[node_id] = node
+            node_index[(node["type"].lower(), node["label"])] = node_id
+        else:
+            existing = nodes_by_id[node_id]
+            if not existing.get("description") and node.get("description"):
+                existing["description"] = node["description"]
+
+    def _ensure_node(
+        self,
+        nodes_by_id: dict[str, dict[str, Any]],
+        node_index: dict[tuple[str, str], str],
+        *,
+        node_type: str,
+        identifier: str,
+        label: str,
+        page: Any,
+        document: str,
+        description: str,
+    ) -> None:
+        """Ensure a node exists before linking it to an edge."""
+
+        node_id = self._make_node_id(node_type.lower().replace(" ", "_"), identifier)
+        if node_id not in nodes_by_id:
+            nodes_by_id[node_id] = {
+                "id": node_id,
+                "label": label,
+                "type": node_type,
+                "page": page,
+                "document": document,
+                "description": description,
+            }
+        node_index[(node_type.lower().replace(" ", "_"), identifier)] = node_id
+
+    def _add_edge(self, edges: list[dict[str, Any]], source_id: str | None, target_id: str | None, relationship: str, weight: float) -> None:
+        """Add a unique edge to the graph."""
+
+        if not source_id or not target_id or source_id == target_id:
+            return
+
+        if any(edge.get("source") == source_id and edge.get("target") == target_id and edge.get("relationship") == relationship for edge in edges):
+            return
+
+        edges.append({
+            "source": source_id,
+            "target": target_id,
+            "relationship": relationship,
+            "weight": round(weight, 2),
+        })
+
+    @staticmethod
+    def _make_node_id(node_type: str, identifier: str) -> str:
+        """Generate a stable node id from a node type and identifier."""
+
+        safe_identifier = re.sub(r"[^a-zA-Z0-9]+", "_", str(identifier).strip()).strip("_")
+        safe_type = re.sub(r"[^a-zA-Z0-9]+", "_", str(node_type).strip()).strip("_")
+        return f"{safe_type}:{safe_identifier}".lower()

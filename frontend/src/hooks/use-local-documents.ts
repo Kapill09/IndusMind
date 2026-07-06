@@ -3,37 +3,16 @@ import type { KnowledgeDocument, UploadResponse } from "@/types";
 
 const STORAGE_KEY = "indus-mind-documents";
 
-const starterDocuments: KnowledgeDocument[] = [
-  {
-    id: "starter-sop",
-    filename: "Plant Maintenance SOP.pdf",
-    pages: 48,
-    chunks: 126,
-    vectors: 126,
-    uploadedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    status: "indexed",
-  },
-  {
-    id: "starter-inspection",
-    filename: "Compressor Inspection Report.pdf",
-    pages: 22,
-    chunks: 61,
-    vectors: 61,
-    uploadedAt: new Date(Date.now() - 1000 * 60 * 60 * 21).toISOString(),
-    status: "indexed",
-  },
-];
-
 export function useLocalDocuments() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return starterDocuments;
+    if (!stored) return [];
 
     try {
       const parsed = JSON.parse(stored) as KnowledgeDocument[];
-      return parsed.length > 0 ? parsed : starterDocuments;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return starterDocuments;
+      return [];
     }
   });
 

@@ -38,6 +38,7 @@ function IndusMindApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [questionsAsked, setQuestionsAsked] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("indus-mind-theme") === "dark");
   const { documents, totals, addUploadedDocument } = useLocalDocuments();
 
@@ -59,16 +60,23 @@ function IndusMindApp() {
       case "upload":
         return <UploadPage onUploaded={addUploadedDocument} />;
       case "documents":
-        return <DocumentsPage documents={documents} onNavigate={setActivePage} />;
+        return (
+          <DocumentsPage
+            documents={documents}
+            onNavigate={setActivePage}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+          />
+        );
       case "analytics":
         return <AnalyticsPage totals={totals} questionsAsked={questionsAsked} />;
       case "settings":
-        return <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />;
+        return <SettingsPage />;
       case "dashboard":
       default:
         return <DashboardPage documents={documents} totals={totals} questionsAsked={questionsAsked} />;
     }
-  }, [activePage, addUploadedDocument, darkMode, documents, messages, questionsAsked, totals]);
+  }, [activePage, addUploadedDocument, documents, messages, questionsAsked, searchQuery, totals]);
 
   return (
     <AppShell
@@ -76,6 +84,10 @@ function IndusMindApp() {
       onNavigate={setActivePage}
       sidebarOpen={sidebarOpen}
       setSidebarOpen={setSidebarOpen}
+      darkMode={darkMode}
+      setDarkMode={setDarkMode}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
     >
       {page}
     </AppShell>

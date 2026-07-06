@@ -1,14 +1,8 @@
-import { Moon, ServerCog, ShieldCheck, SlidersHorizontal, Sun } from "lucide-react";
+import { ServerCog, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface SettingsPageProps {
-  darkMode: boolean;
-  setDarkMode: (value: boolean) => void;
-}
-
-export function SettingsPage({ darkMode, setDarkMode }: SettingsPageProps) {
+export function SettingsPage() {
   return (
     <div className="space-y-6">
       <section>
@@ -22,23 +16,12 @@ export function SettingsPage({ darkMode, setDarkMode }: SettingsPageProps) {
       <section className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>Switch between light and dark enterprise themes.</CardDescription>
+            <CardTitle>Workspace appearance</CardTitle>
+            <CardDescription>Theme controls are available instantly from the top navigation for all pages.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between rounded-lg border border-border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                  {darkMode ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">Dark mode</p>
-                  <p className="text-xs text-muted-foreground">Optimized for control rooms and long review sessions.</p>
-                </div>
-              </div>
-              <Button variant={darkMode ? "default" : "outline"} onClick={() => setDarkMode(!darkMode)}>
-                {darkMode ? "Enabled" : "Enable"}
-              </Button>
+            <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              The current theme is persisted automatically and applies across the enterprise console.
             </div>
           </CardContent>
         </Card>

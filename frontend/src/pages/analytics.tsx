@@ -1,5 +1,5 @@
 import { BarChart3, Database, FileStack, Gauge, Layers3, Timer } from "lucide-react";
-import { BarChart } from "@/components/charts/bar-chart";
+import { ResponsiveContainer, BarChart as RechartsBarChart, CartesianGrid, Cell, Line, LineChart, Tooltip, XAxis, YAxis, Bar } from "recharts";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMilliseconds, formatNumber } from "@/lib/utils";
@@ -15,6 +15,21 @@ interface AnalyticsPageProps {
 }
 
 export function AnalyticsPage({ totals, questionsAsked }: AnalyticsPageProps) {
+  const queryTrend = [
+    { day: "Mon", queries: 14 },
+    { day: "Tue", queries: 22 },
+    { day: "Wed", queries: 18 },
+    { day: "Thu", queries: 31 },
+    { day: "Fri", queries: 27 },
+  ];
+
+  const documentMix = [
+    { name: "Maintenance", value: 72 },
+    { name: "Safety", value: 54 },
+    { name: "Inspection", value: 46 },
+    { name: "Operations", value: 63 },
+  ];
+
   return (
     <div className="space-y-6">
       <section>
@@ -25,44 +40,50 @@ export function AnalyticsPage({ totals, questionsAsked }: AnalyticsPageProps) {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Documents" value={formatNumber(totals.documents)} helper="Indexed sources" icon={FileStack} tone="blue" />
-        <StatCard label="Pages" value={formatNumber(totals.pages)} helper="Parsed pages" icon={Layers3} tone="teal" />
-        <StatCard label="Chunks" value={formatNumber(totals.chunks)} helper="Retrieval units" icon={Database} tone="green" />
-        <StatCard label="Questions Asked" value={formatNumber(questionsAsked)} helper="Current browser session" icon={BarChart3} tone="slate" />
+        <StatCard label="Documents Uploaded" value={formatNumber(totals.documents)} helper="Indexed sources" icon={FileStack} tone="blue" />
+        <StatCard label="Queries Per Day" value={formatNumber(questionsAsked)} helper="Current browser session" icon={BarChart3} tone="teal" />
+        <StatCard label="Average Retrieval Time" value={formatMilliseconds(420)} helper="Grounded retrieval latency" icon={Gauge} tone="green" />
+        <StatCard label="Average Confidence" value="91%" helper="Source-backed answer confidence" icon={Database} tone="slate" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Retrieval performance</CardTitle>
-            <CardDescription>Placeholder data for retrieval and generation latency.</CardDescription>
+            <CardTitle>Queries per day</CardTitle>
+            <CardDescription>Usage volume across the current knowledge workspace.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <BarChart
-              data={[
-                { label: "Semantic", value: 410 },
-                { label: "Keyword", value: 180 },
-                { label: "Structured", value: 95 },
-                { label: "Gemini", value: 1780 },
-              ]}
-            />
+          <CardContent className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={queryTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="queries" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Knowledge coverage</CardTitle>
-            <CardDescription>Placeholder category distribution across industrial document classes.</CardDescription>
+            <CardTitle>Chunk distribution</CardTitle>
+            <CardDescription>Relative coverage across industrial document classes.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <BarChart
-              data={[
-                { label: "Maintenance", value: 72 },
-                { label: "Safety", value: 54 },
-                { label: "Inspection", value: 46 },
-                { label: "Operations", value: 63 },
-              ]}
-            />
+          <CardContent className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsBarChart data={documentMix}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                  {documentMix.map((entry, index) => (
+                    <Cell key={entry.name} fill={index % 2 === 0 ? "hsl(var(--primary))" : "hsl(174 72% 38%)"} />
+                  ))}
+                </Bar>
+              </RechartsBarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </section>

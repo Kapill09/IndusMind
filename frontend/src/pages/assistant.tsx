@@ -1,9 +1,9 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import type React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Bot, Clock3, FileText, Send, Sparkles, UserRound } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Clock3, FileText, Send, Sparkles, UserRound } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { askQuestion } from "@/lib/api";
@@ -71,9 +71,13 @@ export function AssistantPage({ messages, setMessages, onQuestionAnswered }: Ass
 
   const starterPrompts = useMemo(
     () => [
-      "What maintenance steps are required before restarting equipment?",
-      "Summarize the inspection findings with source pages.",
-      "Show the details for problem statement 8.",
+      "Summarize this document",
+      "Explain Problem Statement 8",
+      "Find Safety Procedures",
+      "Extract SOP",
+      "Compare Documents",
+      "Find Compliance Rules",
+      "Generate Maintenance Checklist",
     ],
     [],
   );
@@ -200,8 +204,8 @@ function ChatBubble({ message }: { message: ChatMessage }) {
       className={cn("flex gap-3", isAssistant ? "items-start" : "items-start justify-end")}
     >
       {isAssistant ? <BubbleIcon assistant /> : null}
-      <div className={cn("max-w-[880px] rounded-lg border p-4", isAssistant ? "bg-card" : "bg-primary text-primary-foreground")}>
-        <div className="whitespace-pre-wrap text-sm leading-6">{message.content}</div>
+      <div className={cn("max-w-[880px] rounded-2xl border p-4 shadow-sm", isAssistant ? "bg-card" : "bg-primary text-primary-foreground")}>
+        <div className="whitespace-pre-wrap text-sm leading-7">{message.content}</div>
         {isAssistant ? <AssistantMetadata message={message} /> : null}
       </div>
       {!isAssistant ? <BubbleIcon /> : null}
@@ -241,21 +245,41 @@ function AssistantMetadata({ message }: { message: ChatMessage }) {
 }
 
 function SourcesList({ sources }: { sources: RagSource[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
   return (
-    <div className="grid gap-2 md:grid-cols-2">
+    <div className="space-y-2">
       {sources.slice(0, 4).map((source) => {
         const filename = String(source.metadata.filename ?? "Uploaded document");
+        const isOpen = expanded === source.chunk_id;
         return (
-          <div key={source.chunk_id} className="rounded-md border border-border bg-background p-3">
-            <div className="flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold">{filename}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {pageLabel(source.page_start, source.page_end)} · score {Math.round((source.score ?? 0.72) * 100)}%
+          <div key={source.chunk_id} className="rounded-xl border border-border bg-background/70 p-3">
+            <button
+              type="button"
+              onClick={() => setExpanded(isOpen ? null : source.chunk_id)}
+              className="flex w-full items-start justify-between gap-3 text-left"
+            >
+              <div className="flex min-w-0 items-start gap-2">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold">{filename}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {pageLabel(source.page_start, source.page_end)} · score {Math.round((source.score ?? 0.72) * 100)}%
+                  </p>
+                </div>
+              </div>
+              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+            {isOpen ? (
+              <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs leading-6 text-muted-foreground">
+                <p className="font-medium text-foreground">Retrieved chunk excerpt</p>
+                <p className="mt-2">
+                  {source.metadata.heading ? `${source.metadata.heading} — ` : ""}
+                  {source.metadata.title ? `${source.metadata.title} — ` : ""}
+                  Grounded snippet from the uploaded document.
                 </p>
               </div>
-            </div>
+            ) : null}
           </div>
         );
       })}

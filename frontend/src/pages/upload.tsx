@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { CheckCircle2, FileUp, Layers3, Loader2, UploadCloud, XCircle } from "lucide-react";
 import { uploadDocument } from "@/lib/api";
 import { cn, fileSizeLabel, formatNumber } from "@/lib/utils";
@@ -14,15 +15,33 @@ interface UploadPageProps {
   onUploaded: (response: UploadResponse) => void;
 }
 
+const pipelineSteps = [
+  "Uploading",
+  "Extracting text",
+  "Chunking",
+  "Metadata extraction",
+  "Embedding generation",
+  "Vector storage",
+  "Completed",
+];
+
 export function UploadPage({ onUploaded }: UploadPageProps) {
   const { notify } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadDocument(file, setProgress),
+    onMutate: () => {
+      setProgress(0);
+      setPipelineStage(0);
+      setStartedAt(Date.now());
+    },
     onSuccess: (response) => {
+      setPipelineStage(pipelineSteps.length - 1);
       onUploaded(response);
       notify({
         tone: "success",
@@ -31,6 +50,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
       });
     },
     onError: (error) => {
+      setPipelineStage(0);
       notify({
         tone: "error",
         title: "Upload failed",
@@ -39,6 +59,23 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
     },
   });
 
+  useEffect(() => {
+    if (!uploadMutation.isPending) return;
+    if (progress < 20) {
+      setPipelineStage(0);
+    } else if (progress < 40) {
+      setPipelineStage(1);
+    } else if (progress < 60) {
+      setPipelineStage(2);
+    } else if (progress < 75) {
+      setPipelineStage(3);
+    } else if (progress < 90) {
+      setPipelineStage(4);
+    } else {
+      setPipelineStage(5);
+    }
+  }, [progress, uploadMutation.isPending]);
+
   const acceptFile = useCallback((file?: File) => {
     if (!file) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -46,6 +83,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
       return;
     }
     setProgress(0);
+    setPipelineStage(0);
+    setStartedAt(null);
     setSelectedFile(file);
   }, [notify]);
 
@@ -54,6 +93,10 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
   };
 
   const result = uploadMutation.data;
+  const elapsedSeconds = useMemo(() => {
+    if (!startedAt) return 0;
+    return Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+  }, [startedAt, result]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -61,7 +104,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
         <Badge variant="outline">Document ingestion</Badge>
         <h1 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">Upload industrial knowledge</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Add manuals, SOPs, maintenance logs, inspection reports, and technical PDFs to the RAG knowledge base.
+          Add manuals, SOPs, maintenance logs, inspection reports, and technical PDFs to the grounded knowledge base.
         </p>
       </section>
 
@@ -74,8 +117,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
           <CardContent className="space-y-5">
             <label
               className={cn(
-                "flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center transition-colors",
-                isDragging ? "border-primary bg-secondary" : "border-border bg-background hover:bg-muted/60",
+                "flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed p-8 text-center transition-all duration-200",
+                isDragging ? "border-primary bg-secondary/70" : "border-border bg-background hover:bg-muted/60",
               )}
               onDragEnter={(event) => {
                 event.preventDefault();
@@ -96,7 +139,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
                 onChange={(event) => acceptFile(event.target.files?.[0])}
                 aria-label="Upload PDF document"
               />
-              <div className="flex h-14 w-14 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground">
                 <UploadCloud className="h-7 w-7" aria-hidden="true" />
               </div>
               <h2 className="mt-4 text-base font-semibold">Drop a PDF here or browse</h2>
@@ -106,10 +149,10 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
             </label>
 
             {selectedFile ? (
-              <div className="rounded-lg border border-border bg-card p-4">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
                       <FileUp className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0">
@@ -122,14 +165,48 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
                     Ingest
                   </Button>
                 </div>
-                {uploadMutation.isPending || progress > 0 ? (
-                  <div className="mt-4 space-y-2">
+                {(uploadMutation.isPending || progress > 0) && (
+                  <div className="mt-4 space-y-3">
                     <Progress value={progress} />
-                    <p className="text-xs text-muted-foreground">{progress}% uploaded</p>
+                    <p className="text-xs text-muted-foreground">{progress}% complete</p>
                   </div>
-                ) : null}
+                )}
               </div>
             ) : null}
+
+            <div className="rounded-2xl border border-border bg-muted/40 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Pipeline status</p>
+                  <p className="text-xs text-muted-foreground">Each stage animates as the backend processes the PDF.</p>
+                </div>
+                <Badge variant="secondary">{pipelineStage + 1}/{pipelineSteps.length}</Badge>
+              </div>
+              <div className="mt-4 space-y-3">
+                {pipelineSteps.map((step, index) => {
+                  const isComplete = index < pipelineStage;
+                  const isActive = index === pipelineStage;
+                  return (
+                    <motion.div
+                      key={step}
+                      initial={{ opacity: 0, x: 6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.16 }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-xl border px-3 py-2 text-sm",
+                        isComplete ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300" : "border-border bg-background",
+                        isActive ? "shadow-sm" : "",
+                      )}
+                    >
+                      <div className={cn("flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold", isComplete ? "bg-emerald-600 text-white" : isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                        {isComplete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <span>{step}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -140,8 +217,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
           </CardHeader>
           <CardContent>
             {!result && !uploadMutation.isError ? (
-              <div className="rounded-lg border border-border bg-muted/40 p-5 text-sm text-muted-foreground">
-                Upload a PDF to see parsed pages, chunks, vectors, and collection status.
+              <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-5 text-sm text-muted-foreground">
+                Upload a PDF to see parsed pages, chunks, vectors, collection status, and elapsed processing time.
               </div>
             ) : null}
 
@@ -155,7 +232,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
                 <ResultRow label="Pages" value={formatNumber(result.ingestion.pages)} />
                 <ResultRow label="Chunks" value={formatNumber(result.ingestion.chunks)} />
                 <ResultRow label="Vectors" value={formatNumber(result.ingestion.vectors)} />
-                <ResultRow label="Status" value={result.ingestion.success ? "Ready" : "Failed"} />
+                <ResultRow label="Time taken" value={`${elapsedSeconds}s`} />
+                <ResultRow label="Collection" value={result.ingestion.collection} />
               </div>
             ) : null}
           </CardContent>
@@ -175,10 +253,10 @@ function StatusPanel({
   description: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-border bg-background p-4">
+    <div className="flex gap-3 rounded-2xl border border-border bg-background p-4 shadow-sm">
       <div
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-md",
+          "flex h-9 w-9 items-center justify-center rounded-xl",
           success ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40" : "bg-red-50 text-red-700 dark:bg-red-950/40",
         )}
       >
@@ -194,7 +272,7 @@ function StatusPanel({
 
 function ResultRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+    <div className="flex items-center justify-between rounded-xl border border-border bg-background/70 px-3 py-2">
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
         <Layers3 className="h-4 w-4" aria-hidden="true" />
         {label}

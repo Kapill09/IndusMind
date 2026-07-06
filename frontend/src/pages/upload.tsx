@@ -102,8 +102,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
     <div className="mx-auto max-w-6xl space-y-6">
       <section>
         <Badge variant="outline">Document ingestion</Badge>
-        <h1 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">Upload industrial knowledge</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Upload industrial knowledge</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
           Add manuals, SOPs, maintenance logs, inspection reports, and technical PDFs to the grounded knowledge base.
         </p>
       </section>

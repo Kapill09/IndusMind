@@ -33,8 +33,8 @@ export function AnalyticsPage({ totals, questionsAsked }: AnalyticsPageProps) {
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-2xl font-semibold tracking-normal md:text-3xl">Analytics</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <h1 className="text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Analytics</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
           Operational telemetry view for retrieval quality, document coverage, and knowledge base growth.
         </p>
       </section>

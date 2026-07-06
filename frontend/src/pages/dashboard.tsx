@@ -43,12 +43,12 @@ export function DashboardPage({ documents, totals, questionsAsked }: DashboardPa
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className="flex flex-col justify-between gap-4 rounded-2xl border border-border bg-card/70 p-5 shadow-sm md:flex-row md:items-end"
+        className="flex flex-col justify-between gap-4 rounded-2xl border border-border bg-card/70 p-5 shadow-sm md:flex-row md:items-end md:p-6"
       >
         <div>
           <Badge variant="outline">Enterprise Knowledge Intelligence</Badge>
-          <h1 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">Operational command center</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Operational command center</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
             Monitor ingestion, retrieval latency, grounding quality, and industrial knowledge coverage from one focused control surface.
           </p>
         </div>

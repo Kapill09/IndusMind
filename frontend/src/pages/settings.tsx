@@ -7,8 +7,8 @@ export function SettingsPage() {
     <div className="space-y-6">
       <section>
         <Badge variant="outline">Workspace controls</Badge>
-        <h1 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">Settings</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+        <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Settings</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
           Configure presentation preferences and review production integration settings.
         </p>
       </section>

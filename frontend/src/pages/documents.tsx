@@ -39,8 +39,8 @@ export function DocumentsPage({ documents, onNavigate, searchQuery, onSearchQuer
       <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <Badge variant="outline">Knowledge library</Badge>
-          <h1 className="mt-3 text-2xl font-semibold tracking-normal md:text-3xl">Documents</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">Documents</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
             Review indexed PDFs and confirm the assistant has retrieval-ready source material.
           </p>
         </div>

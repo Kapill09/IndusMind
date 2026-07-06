@@ -19,18 +19,18 @@ const tones = {
 
 export function StatCard({ label, value, helper, icon: Icon, tone = "slate" }: StatCardProps) {
   return (
-    <Card>
-      <CardContent className="p-5">
+    <Card className="transition-transform duration-200 hover:-translate-y-0.5">
+      <CardContent className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-semibold tracking-normal">{value}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            <p className="mt-2 text-2xl font-semibold tracking-[-0.02em]">{value}</p>
           </div>
-          <div className={cn("flex h-10 w-10 items-center justify-center rounded-md", tones[tone])}>
+          <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", tones[tone])}>
             <Icon className="h-5 w-5" aria-hidden="true" />
           </div>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">{helper}</p>
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">{helper}</p>
       </CardContent>
     </Card>
   );

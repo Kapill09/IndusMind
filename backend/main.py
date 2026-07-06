@@ -7,7 +7,10 @@ from fastapi import FastAPI
 # Load environment variables from the project root.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
+from backend.routes.analytics import router as analytics_router
 from backend.routes.ask import router as ask_router
+from backend.routes.documents import router as documents_router
+from backend.routes.health import router as health_router
 from backend.routes.upload import router as upload_router
 
 logging.basicConfig(
@@ -25,6 +28,9 @@ app = FastAPI(
 # Register all API routes.
 app.include_router(upload_router)
 app.include_router(ask_router)
+app.include_router(documents_router)
+app.include_router(analytics_router)
+app.include_router(health_router)
 
 
 @app.get("/", summary="Home")
@@ -36,9 +42,3 @@ def home():
         "status": "Backend Running Successfully",
     }
 
-
-@app.get("/health", summary="Health")
-def health():
-    """Lightweight health endpoint for uptime checks."""
-
-    return {"status": "ok"}

@@ -13,6 +13,7 @@ export default defineConfig({
     proxy: {
       "/upload": "http://127.0.0.1:8000",
       "/ask": "http://127.0.0.1:8000",
+      "/knowledge-graph": "http://127.0.0.1:8000",
       "/api": "http://127.0.0.1:8000",
     },
   },

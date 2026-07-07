@@ -41,6 +41,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
       setStartedAt(Date.now());
     },
     onSuccess: (response) => {
+      setProgress(100);
       setPipelineStage(pipelineSteps.length - 1);
       onUploaded(response);
       notify({
@@ -59,22 +60,50 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
     },
   });
 
-  useEffect(() => {
-    if (!uploadMutation.isPending) return;
-    if (progress < 20) {
-      setPipelineStage(0);
-    } else if (progress < 40) {
-      setPipelineStage(1);
-    } else if (progress < 60) {
-      setPipelineStage(2);
-    } else if (progress < 75) {
-      setPipelineStage(3);
-    } else if (progress < 90) {
-      setPipelineStage(4);
-    } else {
-      setPipelineStage(5);
+  const targetStage = (() => {
+    if (uploadMutation.isSuccess) {
+      return pipelineSteps.length - 1;
     }
-  }, [progress, uploadMutation.isPending]);
+
+    if (!uploadMutation.isPending) {
+      return 0;
+    }
+
+    if (progress < 20) {
+      return 0;
+    }
+    if (progress < 40) {
+      return 1;
+    }
+    if (progress < 60) {
+      return 2;
+    }
+    if (progress < 75) {
+      return 3;
+    }
+    if (progress < 90) {
+      return 4;
+    }
+    return 5;
+  })();
+
+  useEffect(() => {
+    if (uploadMutation.isSuccess) {
+      setPipelineStage(pipelineSteps.length - 1);
+      setProgress(100);
+      return;
+    }
+
+    if (!uploadMutation.isPending || pipelineStage >= targetStage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPipelineStage((current) => Math.min(current + 1, targetStage));
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [pipelineStage, targetStage, uploadMutation.isPending, uploadMutation.isSuccess]);
 
   const acceptFile = useCallback((file?: File) => {
     if (!file) return;
@@ -184,8 +213,9 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
               </div>
               <div className="mt-4 space-y-3">
                 {pipelineSteps.map((step, index) => {
-                  const isComplete = index < pipelineStage;
-                  const isActive = index === pipelineStage;
+                  const isFinalCompleted = uploadMutation.isSuccess && index === pipelineSteps.length - 1;
+                  const isComplete = index < pipelineStage || isFinalCompleted;
+                  const isActive = index === pipelineStage && !uploadMutation.isSuccess;
                   return (
                     <motion.div
                       key={step}
@@ -198,7 +228,10 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
                         isActive ? "shadow-sm" : "",
                       )}
                     >
-                      <div className={cn("flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold", isComplete ? "bg-emerald-600 text-white" : isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                      <div className={cn(
+                        "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold",
+                        isComplete ? "bg-emerald-600 text-white" : isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      )}>
                         {isComplete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
                       </div>
                       <span>{step}</span>

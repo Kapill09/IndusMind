@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import type { Node, Edge } from "@xyflow/react";
+import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import { fetchKnowledgeGraph } from "@/services/knowledge-graph-service";
 import type { KGNode, KGStats } from "@/types/knowledge-graph";
 import { MINIMAP_COLORS, NODE_WIDTH, NODE_HEIGHT } from "@/components/knowledge-graph/knowledge-graph-constants";
@@ -8,7 +8,7 @@ import { MINIMAP_COLORS, NODE_WIDTH, NODE_HEIGHT } from "@/components/knowledge-
 /** Data stored on every React Flow node. */
 export interface KGNodeData extends Record<string, unknown> {
   label: string;
-  nodeType: string;
+  type: string;
   page: number | null;
   document: string;
   description: string;
@@ -16,53 +16,36 @@ export interface KGNodeData extends Record<string, unknown> {
 }
 
 /**
- * Simple force-directed positioning.
- * Positions nodes in a spiral layout grouped by type so they cluster visually.
+ * Simple grid positioning for React Flow nodes.
  */
 function layoutNodes(raw: KGNode[]): Node<KGNodeData>[] {
-  const typeGroups: Record<string, KGNode[]> = {};
-  for (const node of raw) {
-    const t = node.type || "Unknown";
-    (typeGroups[t] ??= []).push(node);
-  }
+  const COLUMNS = Math.max(Math.ceil(Math.sqrt(raw.length)), 1);
+  const X_SPACING = 250;
+  const Y_SPACING = 150;
 
-  const nodes: Node<KGNodeData>[] = [];
-  const types = Object.keys(typeGroups);
-  const angleStep = (2 * Math.PI) / Math.max(types.length, 1);
-
-  types.forEach((type, typeIndex) => {
-    const group = typeGroups[type];
-    const baseAngle = typeIndex * angleStep;
-    const clusterRadius = 300 + types.length * 40;
-    const cx = Math.cos(baseAngle) * clusterRadius;
-    const cy = Math.sin(baseAngle) * clusterRadius;
-
-    group.forEach((node, i) => {
-      const innerAngle = (2 * Math.PI * i) / Math.max(group.length, 1);
-      const innerRadius = 40 + group.length * 12;
-
-      nodes.push({
-        id: node.id,
-        type: "kgNode",
-        position: {
-          x: cx + Math.cos(innerAngle) * innerRadius,
-          y: cy + Math.sin(innerAngle) * innerRadius,
-        },
-        data: {
-          label: node.label,
-          nodeType: node.type,
-          page: node.page,
-          document: node.document,
-          description: node.description,
-          originalId: node.id,
-        },
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
-      });
-    });
+  return raw.map((node, index) => {
+    const row = Math.floor(index / COLUMNS);
+    const col = index % COLUMNS;
+    
+    return {
+      id: node.id,
+      type: "kgNode",
+      position: {
+        x: col * X_SPACING,
+        y: row * Y_SPACING,
+      },
+      data: {
+        label: node.label,
+        type: node.type,
+        page: node.page,
+        document: node.document,
+        description: node.description,
+        originalId: node.id,
+      },
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    };
   });
-
-  return nodes;
 }
 
 function computeStats(raw: KGNode[], edgeCount: number): KGStats {
@@ -96,20 +79,28 @@ export function useKnowledgeGraph() {
   const rawNodes = query.data?.nodes ?? [];
   const rawEdges = query.data?.edges ?? [];
 
-  const flowNodes = useMemo(() => layoutNodes(rawNodes), [rawNodes]);
+  const flowNodes = useMemo(() => {
+    const nodes = layoutNodes(rawNodes);
+    console.log("number of nodes:", nodes.length);
+    return nodes;
+  }, [rawNodes]);
 
   const flowEdges: Edge[] = useMemo(() => {
     const nodeIds = new Set(rawNodes.map((n) => n.id));
-    return rawEdges
+    const edges = rawEdges
       .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e, i) => ({
         id: `edge-${i}`,
         source: e.source,
         target: e.target,
         type: "kgEdge",
-        data: { relationship: e.relationship, weight: e.weight },
+        label: e.relationship,
         animated: e.weight >= 0.8,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        data: { weight: e.weight, relationship: e.relationship },
       }));
+    console.log("number of edges:", edges.length);
+    return edges;
   }, [rawNodes, rawEdges]);
 
   const stats = useMemo(
@@ -118,7 +109,7 @@ export function useKnowledgeGraph() {
   );
 
   const minimapColor = (node: Node) => {
-    const nt = (node.data as KGNodeData)?.nodeType ?? "";
+    const nt = (node.data as KGNodeData)?.type ?? "";
     return MINIMAP_COLORS[nt] ?? "#9ca3af";
   };
 

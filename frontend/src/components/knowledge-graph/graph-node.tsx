@@ -20,8 +20,8 @@ function GraphNodeInner({ data }: NodeProps) {
     _opacity?: number;
   };
 
-  const colors = NODE_COLORS[d.nodeType] ?? DEFAULT_NODE_COLOR;
-  const Icon = NODE_ICONS[d.nodeType];
+  const colors = NODE_COLORS[d.type] ?? DEFAULT_NODE_COLOR;
+  const Icon = NODE_ICONS[d.type];
   const opacity = d._opacity ?? 1;
 
   return (
@@ -72,7 +72,7 @@ function GraphNodeInner({ data }: NodeProps) {
             {d.label}
           </p>
           <p className="truncate text-[10px] leading-tight text-muted-foreground/70">
-            {d.nodeType}
+            {d.type}
           </p>
         </div>
       </div>

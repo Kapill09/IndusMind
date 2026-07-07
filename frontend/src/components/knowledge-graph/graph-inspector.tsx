@@ -31,8 +31,8 @@ export function GraphInspector({
   if (!node) return null;
 
   const d = node.data as KGNodeData;
-  const colors = NODE_COLORS[d.nodeType] ?? DEFAULT_NODE_COLOR;
-  const Icon = NODE_ICONS[d.nodeType];
+  const colors = NODE_COLORS[d.type] ?? DEFAULT_NODE_COLOR;
+  const Icon = NODE_ICONS[d.type];
 
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card/50 lg:w-96">
@@ -55,7 +55,7 @@ export function GraphInspector({
           <div className="min-w-0">
             <h3 className="text-sm font-semibold leading-tight">{d.label}</h3>
             <Badge variant="secondary" className="mt-1 text-[10px]">
-              {d.nodeType}
+              {d.type}
             </Badge>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function GraphInspector({
         {/* Metadata */}
         <DetailSection title="Metadata">
           <div className="space-y-2">
-            <MetaRow label="Entity Type" value={d.nodeType} />
+            <MetaRow label="Entity Type" value={d.type} />
             {d.document && <MetaRow label="Document" value={d.document} />}
             {d.page != null && <MetaRow label="Page" value={String(d.page)} />}
             <MetaRow label="Node ID" value={d.originalId} mono />
@@ -101,7 +101,7 @@ export function GraphInspector({
             <div className="max-h-48 space-y-1.5 overflow-y-auto">
               {connectedNodes.slice(0, 20).map((cn) => {
                 const cData = cn.data as KGNodeData;
-                const cColors = NODE_COLORS[cData.nodeType] ?? DEFAULT_NODE_COLOR;
+                const cColors = NODE_COLORS[cData.type] ?? DEFAULT_NODE_COLOR;
                 const edge = connectedEdges.find(
                   (e) =>
                     (e.source === node.id && e.target === cn.id) ||

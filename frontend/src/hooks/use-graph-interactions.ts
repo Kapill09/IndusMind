@@ -95,7 +95,7 @@ export function useGraphInteractions({
 
     if (activeTypeSet) {
       result = result.filter((n) =>
-        activeTypeSet.has((n.data as KGNodeData).nodeType)
+        activeTypeSet.has((n.data as KGNodeData).type)
       );
     }
 

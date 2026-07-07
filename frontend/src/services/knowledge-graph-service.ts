@@ -8,22 +8,30 @@ const API_BASE_URL =
  * Gracefully returns an empty graph if the backend is unreachable.
  */
 export async function fetchKnowledgeGraph(): Promise<KGApiResponse> {
-  const response = await fetch(`${API_BASE_URL}/knowledge-graph`);
+  console.log("fetchKnowledgeGraph called", `${API_BASE_URL}/knowledge-graph`);
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/knowledge-graph`);
 
-  if (!response.ok) {
-    const detail = await response
-      .json()
-      .then((body) => body?.detail)
-      .catch(() => null);
-    throw new Error(
-      detail ?? `Knowledge graph request failed (${response.status})`
-    );
+    if (!response.ok) {
+      const detail = await response
+        .json()
+        .then((body) => body?.detail)
+        .catch(() => null);
+      throw new Error(
+        detail ?? `Knowledge graph request failed (${response.status})`
+      );
+    }
+
+    const data = await response.json();
+    console.log("API Response:", data);
+
+    return {
+      nodes: Array.isArray(data?.nodes) ? data.nodes : [],
+      edges: Array.isArray(data?.edges) ? data.edges : [],
+    };
+  } catch (err) {
+    console.error("fetchKnowledgeGraph error:", err);
+    throw err;
   }
-
-  const data: KGApiResponse = await response.json();
-
-  return {
-    nodes: Array.isArray(data?.nodes) ? data.nodes : [],
-    edges: Array.isArray(data?.edges) ? data.edges : [],
-  };
 }

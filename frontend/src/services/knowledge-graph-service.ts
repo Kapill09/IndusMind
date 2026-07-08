@@ -1,37 +1,74 @@
 import type { KGApiResponse } from "@/types/knowledge-graph";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
 
 /**
  * Fetch the full knowledge graph from the backend.
  * Gracefully returns an empty graph if the backend is unreachable.
  */
 export async function fetchKnowledgeGraph(): Promise<KGApiResponse> {
-  console.log("fetchKnowledgeGraph called", `${API_BASE_URL}/knowledge-graph`);
+  const url = `${API_BASE_URL}/knowledge-graph`;
+  console.log("[fetchKnowledgeGraph] Request URL:", url);
   
   try {
-    const response = await fetch(`${API_BASE_URL}/knowledge-graph`);
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+    });
+
+    console.log("[fetchKnowledgeGraph] Status:", response.status);
 
     if (!response.ok) {
-      const detail = await response
-        .json()
-        .then((body) => body?.detail)
-        .catch(() => null);
-      throw new Error(
-        detail ?? `Knowledge graph request failed (${response.status})`
-      );
+      let detail = null;
+      try {
+        const body = await response.json();
+        detail = body?.detail;
+      } catch (e) {
+        console.warn("[fetchKnowledgeGraph] Could not parse error body", e);
+      }
+      throw new Error(detail ?? `Knowledge graph request failed (${response.status})`);
     }
 
-    const data = await response.json();
-    console.log("API Response:", data);
+    const data = await response.json().catch((error) => {
+      console.error("[fetchKnowledgeGraph] Response JSON parse error:", error);
+      throw new Error("Knowledge graph response was not valid JSON.");
+    });
+    console.log("[fetchKnowledgeGraph] Response JSON:", data);
 
-    return {
-      nodes: Array.isArray(data?.nodes) ? data.nodes : [],
-      edges: Array.isArray(data?.edges) ? data.edges : [],
-    };
+    // Handle multiple backend shapes flexibly
+    let nodes = [];
+    let edges = [];
+
+    if (Array.isArray(data?.nodes)) {
+      nodes = data.nodes;
+    } else if (Array.isArray(data?.documents)) {
+      nodes = data.documents;
+    } else if (Array.isArray(data?.graph?.nodes)) {
+      nodes = data.graph.nodes;
+    } else if (Array.isArray(data?.data?.nodes)) {
+      nodes = data.data.nodes;
+    }
+
+    if (Array.isArray(data?.edges)) {
+      edges = data.edges;
+    } else if (Array.isArray(data?.relationships)) {
+      edges = data.relationships;
+    } else if (Array.isArray(data?.graph?.edges)) {
+      edges = data.graph.edges;
+    } else if (Array.isArray(data?.data?.edges)) {
+      edges = data.data.edges;
+    }
+
+    console.log("[fetchKnowledgeGraph] Parsed graph:", {
+      nodes: nodes.length,
+      edges: edges.length,
+    });
+    return { nodes, edges };
   } catch (err) {
-    console.error("fetchKnowledgeGraph error:", err);
+    console.error("[fetchKnowledgeGraph] error:", err);
     throw err;
   }
 }

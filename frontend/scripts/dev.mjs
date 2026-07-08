@@ -35,7 +35,7 @@ function findPythonExecutable() {
 function runCommand(command, args, options = {}) {
   const child = spawn(command, args, {
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
     ...options,
   });
 

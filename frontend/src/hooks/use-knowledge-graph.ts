@@ -69,6 +69,8 @@ function computeStats(raw: KGNode[], edgeCount: number): KGStats {
 }
 
 export function useKnowledgeGraph() {
+  console.log("[useKnowledgeGraph] Hook executed, setting up useQuery...");
+  
   const query = useQuery({
     queryKey: ["knowledge-graph"],
     queryFn: fetchKnowledgeGraph,
@@ -79,9 +81,19 @@ export function useKnowledgeGraph() {
   const rawNodes = query.data?.nodes ?? [];
   const rawEdges = query.data?.edges ?? [];
 
+  console.log("[useKnowledgeGraph] React Query state:", {
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isError: query.isError,
+  });
+  console.log("[useKnowledgeGraph] Received JSON:", query.data);
+
   const flowNodes = useMemo(() => {
     const nodes = layoutNodes(rawNodes);
-    console.log("number of nodes:", nodes.length);
+    console.log("[useKnowledgeGraph] Fetched raw nodes:", rawNodes.length, rawNodes[0]);
+    console.log("[useKnowledgeGraph] Transformed nodes for React Flow:", nodes.length, nodes[0]);
     return nodes;
   }, [rawNodes]);
 
@@ -99,7 +111,8 @@ export function useKnowledgeGraph() {
         markerEnd: { type: MarkerType.ArrowClosed },
         data: { weight: e.weight, relationship: e.relationship },
       }));
-    console.log("number of edges:", edges.length);
+    console.log("[useKnowledgeGraph] Fetched raw edges:", rawEdges.length, rawEdges[0]);
+    console.log("[useKnowledgeGraph] Transformed edges for React Flow:", edges.length, edges[0]);
     return edges;
   }, [rawNodes, rawEdges]);
 

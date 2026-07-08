@@ -104,6 +104,15 @@ export const NODE_COLORS: Record<string, NodeColorConfig> = {
     textDark: "dark:text-yellow-200",
     glow: "rgba(234,179,8,0.35)",
   },
+  Chunk: {
+    bg: "bg-zinc-100",
+    bgDark: "dark:bg-zinc-800",
+    border: "border-zinc-300",
+    borderDark: "dark:border-zinc-600",
+    text: "text-zinc-700",
+    textDark: "dark:text-zinc-200",
+    glow: "rgba(113,113,122,0.35)",
+  },
 };
 
 /** Fallback color when the node type is not recognised. */
@@ -129,6 +138,7 @@ export const NODE_ICONS: Record<string, React.ComponentType<{ className?: string
   Regulations: Scale,
   SOPs: BookOpen,
   Page: File,
+  Chunk: File,
 };
 
 /** Hex colour used for the React Flow minimap node colour. */
@@ -143,6 +153,7 @@ export const MINIMAP_COLORS: Record<string, string> = {
   Regulations: "#10b981",
   SOPs: "#6366f1",
   Page: "#eab308",
+  Chunk: "#71717a",
 };
 
 /** Default dimensions for custom graph nodes. */

@@ -31,17 +31,23 @@ RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Service Instances
 # -----------------------------
 
-# Create these only once.
 pdf_service = PDFService()
-embedding_service = EmbeddingService()
 vectordb_service = VectorDBService()
+ingestion_pipeline: IngestionPipeline | None = None
 
-# Pipeline orchestrates all services.
-ingestion_pipeline = IngestionPipeline(
-    pdf_service=pdf_service,
-    embedding_service=embedding_service,
-    vectordb_service=vectordb_service,
-)
+
+def get_ingestion_pipeline() -> IngestionPipeline:
+    """Lazily initialize ingestion so app startup does not load embedding models."""
+
+    global ingestion_pipeline
+    if ingestion_pipeline is None:
+        ingestion_pipeline = IngestionPipeline(
+            pdf_service=pdf_service,
+            embedding_service=EmbeddingService(),
+            vectordb_service=vectordb_service,
+        )
+
+    return ingestion_pipeline
 
 
 # -----------------------------
@@ -85,7 +91,7 @@ async def upload_pdf(file: UploadFile):
 
     # Automatically process the uploaded PDF.
     try:
-        summary = ingestion_pipeline.ingest_document(file_path)
+        summary = get_ingestion_pipeline().ingest_document(file_path)
 
     except IngestionPipelineError as exc:
         logger.exception("PDF ingestion failed for %s", safe_filename)

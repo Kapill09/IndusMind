@@ -11,10 +11,10 @@ from backend.pipeline.rag_pipeline import (
     RAGPipelineValidationError,
 )
 
-from backend.services.embedding_service import EmbeddingService
-from backend.services.vectordb_service import VectorDBService
-from backend.services.retrieval_service import RetrievalService
 from backend.services.llm_service import LLMService
+from backend.services.embedding_service import EmbeddingService
+from backend.services.retrieval_service import RetrievalService
+from backend.services.vectordb_service import VectorDBService
 
 
 # -----------------------------
@@ -54,23 +54,26 @@ class AskRequest(BaseModel):
 # Service Instances
 # -----------------------------
 
-# Create these once so the embedding model and ChromaDB collection are reused
-# across requests instead of being reinitialized for every question.
-embedding_service = EmbeddingService()
+rag_pipeline: RAGPipeline | None = None
 
-vectordb_service = VectorDBService()
 
-retrieval_service = RetrievalService(
-    embedding_service=embedding_service,
-    vectordb_service=vectordb_service,
-)
+def get_rag_pipeline() -> RAGPipeline:
+    """Lazily initialize RAG services so app startup does not load embedding models."""
 
-llm_service = LLMService()
+    global rag_pipeline
+    if rag_pipeline is None:
+        embedding_service = EmbeddingService()
+        vectordb_service = VectorDBService()
+        retrieval_service = RetrievalService(
+            embedding_service=embedding_service,
+            vectordb_service=vectordb_service,
+        )
+        rag_pipeline = RAGPipeline(
+            retrieval_service=retrieval_service,
+            llm_service=LLMService(),
+        )
 
-rag_pipeline = RAGPipeline(
-    retrieval_service=retrieval_service,
-    llm_service=llm_service,
-)
+    return rag_pipeline
 
 
 # -----------------------------
@@ -121,7 +124,7 @@ async def ask_question(request: AskRequest):
     start_time = perf_counter()
 
     try:
-        response = rag_pipeline.ask(
+        response = get_rag_pipeline().ask(
             question=request.question,
             top_k=request.top_k,
         )

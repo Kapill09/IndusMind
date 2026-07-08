@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ReactFlowProvider, useReactFlow, type Node } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { Share2 } from "lucide-react";
@@ -20,6 +20,10 @@ interface KnowledgeGraphPageProps {
 }
 
 export function KnowledgeGraphPage({ onNavigate }: KnowledgeGraphPageProps) {
+  useEffect(() => {
+    console.log("[KnowledgeGraphPage] Component mounted");
+  }, []);
+
   return (
     <ReactFlowProvider>
       <KnowledgeGraphContent onNavigate={onNavigate} />
@@ -97,6 +101,7 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
   }, [contextMenu]);
 
   // ── Loading ────────────────────────────────────────────────────
+  console.log("[KnowledgeGraphContent] Render - isLoading:", isLoading, "isError:", isError, "nodes length:", nodes.length);
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -155,7 +160,7 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
 
         {/* Center canvas */}
         <div
-          className="relative flex-1"
+          className="relative flex-1 h-full"
           onContextMenu={(e) => {
             // Only handle context menu on nodes (handled via node's onContextMenu)
           }}

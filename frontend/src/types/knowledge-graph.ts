@@ -32,7 +32,8 @@ export type KGNodeType =
   | "Regulations"
   | "Maintenance concepts"
   | "SOPs"
-  | "Page";
+  | "Page"
+  | "Chunk";
 
 /** Filter categories exposed in the sidebar. */
 export type KGFilterKey =

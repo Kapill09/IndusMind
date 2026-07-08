@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -15,8 +16,25 @@ knowledge_graph_service = KnowledgeGraphService()
 def get_knowledge_graph() -> dict[str, Any]:
     """Return the knowledge graph as JSON for the frontend visualization layer."""
 
+    started_at = perf_counter()
+    logger.info("Entering knowledge graph endpoint")
     try:
-        return knowledge_graph_service.build_graph()
+        graph = knowledge_graph_service.build_graph()
+        nodes = graph.get("nodes") or []
+        edges = graph.get("edges") or []
+        logger.info(
+            "Leaving knowledge graph endpoint: nodes=%s edges=%s execution_time_ms=%s",
+            len(nodes),
+            len(edges),
+            int((perf_counter() - started_at) * 1000),
+        )
+        return {
+            "nodes": nodes,
+            "edges": edges,
+        }
     except KnowledgeGraphServiceError as exc:
-        logger.exception("Failed to build knowledge graph")
+        logger.exception(
+            "Failed to build knowledge graph after %sms",
+            int((perf_counter() - started_at) * 1000),
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

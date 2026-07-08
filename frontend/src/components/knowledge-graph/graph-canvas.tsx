@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import {
   ReactFlow,
   Background,
@@ -44,6 +44,18 @@ export function GraphCanvas({
     },
     [fitView, onNodeDoubleClick]
   );
+
+  console.log("[GraphCanvas] Rendering with nodes:", nodes?.length, "edges:", edges?.length);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      fitView({ duration: 600, padding: 0.3 });
+    });
+  }, [edges.length, fitView, nodes.length]);
 
   const defaultEdgeOptions = useMemo(
     () => ({

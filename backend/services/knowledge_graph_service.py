@@ -1,6 +1,7 @@
 import logging
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from backend.services.document_service import DocumentService, DocumentServiceError
@@ -68,13 +69,13 @@ class KnowledgeGraphService:
         node_index: dict[tuple[str, str], str] = {}
 
         for document in documents:
-            document_id = str(document.get("document_id", "")).strip()
+            document_id = self._clean_string(document.get("document_id"))
             if not document_id:
                 continue
             node_id = self._make_node_id("document", document_id)
             nodes_by_id[node_id] = {
                 "id": node_id,
-                "label": str(document.get("filename") or document_id),
+                "label": self._clean_string(document.get("filename")) or document_id,
                 "type": "Document",
                 "page": None,
                 "document": document_id,
@@ -82,61 +83,82 @@ class KnowledgeGraphService:
             }
             node_index[("document", document_id)] = node_id
 
+        logger.info(
+            "Knowledge graph source loaded: documents=%s chunks=%s",
+            len(documents),
+            len(chunks),
+        )
+
         for chunk in chunks:
             metadata = chunk.get("metadata") or {}
-            document_id = str(metadata.get("document_id", "")).strip()
-            filename = str(metadata.get("filename") or "unknown.pdf")
-            page = metadata.get("page_start")
-            text = str(chunk.get("text", "")).strip()
-            chunk_id = str(chunk.get("chunk_id", "")).strip()
+            chunk_id = self._clean_string(chunk.get("chunk_id"))
+            document_id = self._clean_string(metadata.get("document_id"))
+            filename = self._clean_string(metadata.get("filename")) or self._filename_from_chunk_id(chunk_id)
+            page = self._clean_page(metadata.get("page_start"))
+            text = self._clean_string(chunk.get("text"))
 
-            if document_id:
-                self._ensure_node(
-                    nodes_by_id,
-                    node_index,
-                    node_type="Document",
-                    identifier=document_id,
-                    label=filename,
-                    page=None,
-                    document=document_id,
-                    description="Indexed source document",
-                )
+            if not chunk_id:
+                logger.warning("Skipping Chroma record without chunk_id")
+                continue
+            if not document_id:
+                logger.warning("Skipping chunk without document_id metadata: chunk_id=%s", chunk_id)
+                continue
+
+            self._ensure_node(
+                nodes_by_id,
+                node_index,
+                node_type="Document",
+                identifier=document_id,
+                label=filename,
+                page=None,
+                document=document_id,
+                description="Indexed source document",
+            )
+
+            chunk_label = f"Chunk {metadata.get('chunk_index') or chunk_id.rsplit(':', 1)[-1]}"
+            self._ensure_node(
+                nodes_by_id,
+                node_index,
+                node_type="Chunk",
+                identifier=chunk_id,
+                label=chunk_label,
+                page=page,
+                document=document_id,
+                description=(text[:180] + "...") if len(text) > 180 else text,
+            )
+
+            document_node_id = node_index[("document", document_id)]
+            chunk_node_id = node_index[("chunk", chunk_id)]
+            self._add_edge(edges, document_node_id, chunk_node_id, "contains", 1.0)
 
             entity_nodes = self._extract_entities(text, metadata, document_id, page)
             for entity_node in entity_nodes:
                 self._upsert_node(nodes_by_id, node_index, entity_node)
-                self._add_edge(
-                    edges,
-                    source_id=node_index[("document", document_id)] if document_id and ("document", document_id) in node_index else None,
-                    target_id=entity_node["id"],
-                    relationship="mentions",
-                    weight=1.0,
+                self._add_edge(edges, chunk_node_id, entity_node["id"], "mentions", 0.9)
+                self._add_edge(edges, document_node_id, entity_node["id"], "mentions", 0.6)
+
+            if page is not None:
+                self._ensure_node(
+                    nodes_by_id,
+                    node_index,
+                    node_type="Page",
+                    identifier=f"{document_id}:{page}",
+                    label=f"Page {page}",
+                    page=page,
+                    document=document_id,
+                    description="Page-level knowledge context",
                 )
-
-            if document_id:
-                document_node_id = node_index[("document", document_id)]
-                page_node_id = self._make_node_id("page", f"{document_id}:{page}") if page is not None else None
-                if page_node_id is not None:
-                    self._ensure_node(
-                        nodes_by_id,
-                        node_index,
-                        node_type="Page",
-                        identifier=f"{document_id}:{page}",
-                        label=f"Page {page}",
-                        page=page,
-                        document=document_id,
-                        description="Page-level knowledge context",
-                    )
-                    self._add_edge(edges, document_node_id, page_node_id, "references", 1.0)
-                    self._add_edge(edges, page_node_id, document_node_id, "belongs_to", 0.8)
-
-                self._add_edge(edges, document_node_id, document_node_id, "same_document", 0.7)
-
-            if document_id and chunk_id:
-                self._add_edge(edges, self._make_node_id("chunk", chunk_id), self._make_node_id("document", document_id), "references", 0.9)
+                page_node_id = node_index[("page", f"{document_id}:{page}")]
+                self._add_edge(edges, document_node_id, page_node_id, "references", 0.85)
+                self._add_edge(edges, page_node_id, chunk_node_id, "contains", 0.75)
 
         self._connect_related_entities(nodes_by_id, edges)
 
+        logger.info(
+            "Knowledge graph built from Chroma: nodes=%s edges=%s",
+            len(nodes_by_id),
+            len(edges),
+        )
         return {
             "nodes": list(nodes_by_id.values()),
             "edges": edges,
@@ -170,8 +192,9 @@ class KnowledgeGraphService:
                         }
                     )
 
-        if metadata.get("problem_statement_number"):
-            label = f"Problem Statement {metadata['problem_statement_number']}"
+        problem_statement_number = self._clean_string(metadata.get("problem_statement_number"))
+        if problem_statement_number:
+            label = f"Problem Statement {problem_statement_number}"
             entity_id = self._make_node_id("problem_statement", f"{document_id}:{label}")
             entities.append(
                 {
@@ -184,8 +207,9 @@ class KnowledgeGraphService:
                 }
             )
 
-        if metadata.get("heading"):
-            label = str(metadata["heading"])
+        heading = self._clean_string(metadata.get("heading"))
+        if heading:
+            label = heading
             entity_id = self._make_node_id("heading", f"{document_id}:{label}")
             entities.append(
                 {
@@ -220,34 +244,27 @@ class KnowledgeGraphService:
     def _connect_related_entities(self, nodes_by_id: dict[str, dict[str, Any]], edges: list[dict[str, Any]]) -> None:
         """Link entities that share the same document or type to support graph exploration."""
 
-        by_document: dict[str, list[str]] = defaultdict(list)
+        chunks_by_document: dict[str, list[str]] = defaultdict(list)
         by_type: dict[str, list[str]] = defaultdict(list)
 
         for node_id, node in nodes_by_id.items():
             document = node.get("document")
-            if document:
-                by_document[document].append(node_id)
+            if document and node.get("type") == "Chunk":
+                chunks_by_document[document].append(node_id)
             node_type = node.get("type")
-            if node_type:
+            if node_type and node_type not in {"Document", "Page", "Chunk"}:
                 by_type[node_type].append(node_id)
 
-        for document_id, node_ids in by_document.items():
-            if len(node_ids) < 2:
-                continue
-            for source_id in node_ids:
-                for target_id in node_ids:
-                    if source_id == target_id:
-                        continue
-                    self._add_edge(edges, source_id, target_id, "related_to", 0.6)
+        for node_ids in chunks_by_document.values():
+            for source_id, target_id in zip(node_ids, node_ids[1:]):
+                self._add_edge(edges, source_id, target_id, "next_chunk", 0.5)
 
         for node_type, node_ids in by_type.items():
             if len(node_ids) < 2:
                 continue
-            for source_id in node_ids[:10]:
-                for target_id in node_ids[:10]:
-                    if source_id == target_id:
-                        continue
-                    self._add_edge(edges, source_id, target_id, "related_to", 0.4)
+            capped_node_ids = node_ids[:25]
+            for source_id, target_id in zip(capped_node_ids, capped_node_ids[1:]):
+                self._add_edge(edges, source_id, target_id, "related_to", 0.4)
 
     def _upsert_node(self, nodes_by_id: dict[str, dict[str, Any]], node_index: dict[tuple[str, str], str], node: dict[str, Any]) -> None:
         """Insert or update a node in the graph."""
@@ -310,3 +327,30 @@ class KnowledgeGraphService:
         safe_identifier = re.sub(r"[^a-zA-Z0-9]+", "_", str(identifier).strip()).strip("_")
         safe_type = re.sub(r"[^a-zA-Z0-9]+", "_", str(node_type).strip()).strip("_")
         return f"{safe_type}:{safe_identifier}".lower()
+
+    @staticmethod
+    def _clean_string(value: Any) -> str:
+        """Return a stripped string for optional Chroma metadata values."""
+
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @staticmethod
+    def _clean_page(value: Any) -> int | None:
+        """Return a usable page number when metadata contains one."""
+
+        try:
+            page = int(value)
+        except (TypeError, ValueError):
+            return None
+        return page if page >= 0 else None
+
+    @staticmethod
+    def _filename_from_chunk_id(chunk_id: str) -> str:
+        """Infer a readable source label when filename metadata is missing."""
+
+        if not chunk_id:
+            return "unknown.pdf"
+        document_part = chunk_id.split(":chunk-", 1)[0]
+        return Path(document_part).name or "unknown.pdf"

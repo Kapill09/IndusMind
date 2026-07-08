@@ -1,12 +1,17 @@
 import logging
+import os
 from pathlib import Path
 from typing import Any, TypedDict
 
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+
 import chromadb
+from backend.config import CHROMA_PATH, COLLECTION_NAME
 
 
-COLLECTION_NAME = "industrial_knowledge"
-DEFAULT_CHROMA_PATH = Path(__file__).resolve().parents[2] / "data" / "chroma"
+DEFAULT_CHROMA_PATH = Path(CHROMA_PATH)
+if not DEFAULT_CHROMA_PATH.is_absolute():
+    DEFAULT_CHROMA_PATH = Path(__file__).resolve().parents[2] / DEFAULT_CHROMA_PATH
 logger = logging.getLogger(__name__)
 
 
@@ -180,7 +185,7 @@ class VectorDBService:
 
         try:
             get_args: dict[str, Any] = {
-                "include": ["documents", "metadatas"],
+                "include": ["documents", "metadatas", "embeddings"],
             }
             if limit is not None:
                 get_args["limit"] = limit
@@ -188,6 +193,24 @@ class VectorDBService:
             results = self.collection.get(**get_args)
         except Exception as exc:
             raise VectorDBOperationError("Failed to read chunks from ChromaDB collection.") from exc
+
+        ids = results.get("ids", []) or []
+        documents = results.get("documents", []) or []
+        metadatas = results.get("metadatas", []) or []
+        embeddings = results.get("embeddings")
+        try:
+            embedding_count = len(embeddings) if embeddings is not None else 0
+        except TypeError:
+            embedding_count = 0
+
+        logger.info(
+            "Chroma collection.get diagnostics: collection=%s document_count=%s metadata_count=%s embedding_count=%s ids=%s",
+            self.collection_name,
+            len(documents),
+            len(metadatas),
+            embedding_count,
+            ids,
+        )
 
         formatted = self._format_get_results(results)
         logger.info(

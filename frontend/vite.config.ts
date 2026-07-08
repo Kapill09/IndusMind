@@ -11,10 +11,22 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/upload": "http://127.0.0.1:8000",
-      "/ask": "http://127.0.0.1:8000",
-      "/knowledge-graph": "http://127.0.0.1:8000",
-      "/api": "http://127.0.0.1:8000",
+      "/upload": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/ask": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/knowledge-graph": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
     },
   },
 });

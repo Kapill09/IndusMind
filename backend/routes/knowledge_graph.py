@@ -22,10 +22,10 @@ def get_knowledge_graph() -> dict[str, Any]:
         graph = knowledge_graph_service.build_graph()
         nodes = graph.get("nodes") or []
         edges = graph.get("edges") or []
+        logger.info("Knowledge graph node count: %s", len(nodes))
+        logger.info("Knowledge graph edge count: %s", len(edges))
         logger.info(
-            "Leaving knowledge graph endpoint: nodes=%s edges=%s execution_time_ms=%s",
-            len(nodes),
-            len(edges),
+            "Leaving knowledge graph endpoint: execution_time_ms=%s",
             int((perf_counter() - started_at) * 1000),
         )
         return {

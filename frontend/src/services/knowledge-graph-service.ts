@@ -2,6 +2,7 @@ import type { KGApiResponse } from "@/types/knowledge-graph";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
+const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
  * Fetch the full knowledge graph from the backend.
@@ -10,10 +11,15 @@ const API_BASE_URL =
 export async function fetchKnowledgeGraph(): Promise<KGApiResponse> {
   const url = `${API_BASE_URL}/knowledge-graph`;
   console.log("[fetchKnowledgeGraph] Request URL:", url);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
   
   try {
     const response = await fetch(url, {
       method: "GET",
+      signal: controller.signal,
       headers: {
         "Accept": "application/json",
       },
@@ -68,7 +74,13 @@ export async function fetchKnowledgeGraph(): Promise<KGApiResponse> {
     });
     return { nodes, edges };
   } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      console.error("[fetchKnowledgeGraph] Request timed out:", url);
+      throw new Error("Knowledge graph request timed out.");
+    }
     console.error("[fetchKnowledgeGraph] error:", err);
     throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }

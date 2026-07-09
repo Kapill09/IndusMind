@@ -4,7 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from backend.services.document_service import DocumentService, DocumentServiceError
+from backend.services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -53,55 +53,38 @@ class KnowledgeGraphService:
         """Construct a JSON graph with nodes and edges derived from indexed chunks."""
 
         try:
-            documents = self.document_service.list_documents()
-        except DocumentServiceError as exc:
-            logger.exception("Failed to load documents for knowledge graph")
-            raise KnowledgeGraphServiceError("Unable to build the knowledge graph from indexed documents.") from exc
-
-        try:
             chunks = self.document_service.vectordb_service.get_chunks()
         except Exception as exc:
             logger.exception("Failed to read chunks for knowledge graph")
             raise KnowledgeGraphServiceError("Unable to read vector chunks for knowledge graph construction.") from exc
 
+        if not chunks:
+            logger.warning(
+                "Knowledge graph source loaded no Chroma chunks: collection=%s",
+                self.document_service.vectordb_service.collection_name,
+            )
+            return {"nodes": [], "edges": []}
+
         nodes_by_id: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, Any]] = []
         node_index: dict[tuple[str, str], str] = {}
 
-        for document in documents:
-            document_id = self._clean_string(document.get("document_id"))
-            if not document_id:
-                continue
-            node_id = self._make_node_id("document", document_id)
-            nodes_by_id[node_id] = {
-                "id": node_id,
-                "label": self._clean_string(document.get("filename")) or document_id,
-                "type": "Document",
-                "page": None,
-                "document": document_id,
-                "description": f"Indexed industrial document with {document.get('chunks', 0)} chunks.",
-            }
-            node_index[("document", document_id)] = node_id
-
         logger.info(
-            "Knowledge graph source loaded: documents=%s chunks=%s",
-            len(documents),
+            "Knowledge graph source loaded from Chroma: collection=%s chunks=%s",
+            self.document_service.vectordb_service.collection_name,
             len(chunks),
         )
 
         for chunk in chunks:
             metadata = chunk.get("metadata") or {}
-            chunk_id = self._clean_string(chunk.get("chunk_id"))
-            document_id = self._clean_string(metadata.get("document_id"))
-            filename = self._clean_string(metadata.get("filename")) or self._filename_from_chunk_id(chunk_id)
+            chunk_id = self._resolve_chunk_id(chunk)
+            document_id = self._resolve_document_id(chunk_id, metadata)
+            filename = self._resolve_filename(chunk_id, metadata, document_id)
             page = self._clean_page(metadata.get("page_start"))
             text = self._clean_string(chunk.get("text"))
 
             if not chunk_id:
-                logger.warning("Skipping Chroma record without chunk_id")
-                continue
-            if not document_id:
-                logger.warning("Skipping chunk without document_id metadata: chunk_id=%s", chunk_id)
+                logger.warning("Skipping Chroma record without a resolvable chunk_id: metadata=%s", metadata)
                 continue
 
             self._ensure_node(
@@ -112,7 +95,7 @@ class KnowledgeGraphService:
                 label=filename,
                 page=None,
                 document=document_id,
-                description="Indexed source document",
+                description="Indexed source document from ChromaDB",
             )
 
             chunk_label = f"Chunk {metadata.get('chunk_index') or chunk_id.rsplit(':', 1)[-1]}"
@@ -153,6 +136,7 @@ class KnowledgeGraphService:
                 self._add_edge(edges, page_node_id, chunk_node_id, "contains", 0.75)
 
         self._connect_related_entities(nodes_by_id, edges)
+        self._refresh_document_descriptions(nodes_by_id)
 
         logger.info(
             "Knowledge graph built from Chroma: nodes=%s edges=%s",
@@ -347,6 +331,50 @@ class KnowledgeGraphService:
         return page if page >= 0 else None
 
     @staticmethod
+    def _resolve_chunk_id(chunk: dict[str, Any]) -> str:
+        """Resolve a stable chunk id from Chroma id or metadata."""
+
+        metadata = chunk.get("metadata") or {}
+        return (
+            KnowledgeGraphService._clean_string(chunk.get("chunk_id"))
+            or KnowledgeGraphService._clean_string(metadata.get("chunk_id"))
+        )
+
+    @staticmethod
+    def _resolve_document_id(chunk_id: str, metadata: dict[str, Any]) -> str:
+        """Resolve document id without dropping chunks that have older metadata."""
+
+        document_id = KnowledgeGraphService._clean_string(metadata.get("document_id"))
+        if document_id:
+            return document_id
+
+        filename = KnowledgeGraphService._clean_string(metadata.get("filename"))
+        if filename:
+            return Path(filename).stem
+
+        if ":chunk-" in chunk_id:
+            return chunk_id.split(":chunk-", 1)[0]
+
+        if chunk_id:
+            return chunk_id.rsplit(":", 1)[0]
+
+        return "unknown-document"
+
+    @staticmethod
+    def _resolve_filename(chunk_id: str, metadata: dict[str, Any], document_id: str) -> str:
+        """Resolve a readable document label from metadata or chunk id."""
+
+        filename = KnowledgeGraphService._clean_string(metadata.get("filename"))
+        if filename:
+            return filename
+
+        inferred = KnowledgeGraphService._filename_from_chunk_id(chunk_id)
+        if inferred != "unknown.pdf":
+            return inferred
+
+        return f"{document_id}.pdf" if document_id else "unknown.pdf"
+
+    @staticmethod
     def _filename_from_chunk_id(chunk_id: str) -> str:
         """Infer a readable source label when filename metadata is missing."""
 
@@ -354,3 +382,21 @@ class KnowledgeGraphService:
             return "unknown.pdf"
         document_part = chunk_id.split(":chunk-", 1)[0]
         return Path(document_part).name or "unknown.pdf"
+
+    @staticmethod
+    def _refresh_document_descriptions(nodes_by_id: dict[str, dict[str, Any]]) -> None:
+        """Update document node descriptions with actual chunk counts."""
+
+        chunk_counts: dict[str, int] = defaultdict(int)
+        for node in nodes_by_id.values():
+            if node.get("type") == "Chunk":
+                document = KnowledgeGraphService._clean_string(node.get("document"))
+                if document:
+                    chunk_counts[document] += 1
+
+        for node in nodes_by_id.values():
+            if node.get("type") != "Document":
+                continue
+            document = KnowledgeGraphService._clean_string(node.get("document"))
+            count = chunk_counts.get(document, 0)
+            node["description"] = f"Indexed source document from ChromaDB with {count} chunks."

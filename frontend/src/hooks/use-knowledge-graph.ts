@@ -2,8 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { type Node, type Edge, MarkerType } from "@xyflow/react";
 import { fetchKnowledgeGraph } from "@/services/knowledge-graph-service";
-import type { KGNode, KGStats } from "@/types/knowledge-graph";
+import type { KGEdge, KGNode, KGStats } from "@/types/knowledge-graph";
 import { MINIMAP_COLORS, NODE_WIDTH, NODE_HEIGHT } from "@/components/knowledge-graph/knowledge-graph-constants";
+
+export type KGDisplayMode = "summary" | "full";
+
+const SUMMARY_NODE_LIMIT = 25;
+const SUMMARY_EDGE_LIMIT = 35;
+const DETAIL_NODE_TYPES = new Set(["Page", "Chunk"]);
+const MAIN_TYPE_QUOTAS: Record<string, number> = {
+  Document: 3,
+  Equipment: 5,
+  "Problem Statements": 3,
+  Technologies: 4,
+  "Maintenance concepts": 3,
+  "Safety terms": 3,
+  Standards: 2,
+  Regulations: 2,
+  SOPs: 2,
+};
 
 /** Data stored on every React Flow node. */
 export interface KGNodeData extends Record<string, unknown> {
@@ -26,7 +43,7 @@ function layoutNodes(raw: KGNode[]): Node<KGNodeData>[] {
   return raw.map((node, index) => {
     const row = Math.floor(index / COLUMNS);
     const col = index % COLUMNS;
-    
+
     return {
       id: node.id,
       type: "kgNode",
@@ -68,9 +85,66 @@ function computeStats(raw: KGNode[], edgeCount: number): KGStats {
   };
 }
 
-export function useKnowledgeGraph() {
+function summarizeGraph(rawNodes: KGNode[], rawEdges: KGEdge[]) {
+  if (rawNodes.length <= SUMMARY_NODE_LIMIT) {
+    return { nodes: rawNodes, edges: rawEdges };
+  }
+
+  const nodeById = new Map(rawNodes.map((node) => [node.id, node]));
+  const scores = new Map<string, number>();
+
+  for (const edge of rawEdges) {
+    const weight = Number.isFinite(edge.weight) ? edge.weight : 0.5;
+    scores.set(edge.source, (scores.get(edge.source) ?? 0) + weight);
+    scores.set(edge.target, (scores.get(edge.target) ?? 0) + weight);
+  }
+
+  const scoreNode = (node: KGNode) => scores.get(node.id) ?? 0;
+  const mainNodes = rawNodes.filter((node) => !DETAIL_NODE_TYPES.has(node.type));
+  const candidates = mainNodes.length > 0 ? mainNodes : rawNodes;
+  const selectedIds = new Set<string>();
+
+  for (const [type, quota] of Object.entries(MAIN_TYPE_QUOTAS)) {
+    candidates
+      .filter((node) => node.type === type)
+      .sort((a, b) => scoreNode(b) - scoreNode(a) || a.label.localeCompare(b.label))
+      .slice(0, quota)
+      .forEach((node) => selectedIds.add(node.id));
+  }
+
+  candidates
+    .filter((node) => !selectedIds.has(node.id))
+    .sort((a, b) => scoreNode(b) - scoreNode(a) || a.label.localeCompare(b.label))
+    .slice(0, Math.max(SUMMARY_NODE_LIMIT - selectedIds.size, 0))
+    .forEach((node) => selectedIds.add(node.id));
+
+  const selectedNodes = Array.from(selectedIds)
+    .map((id) => nodeById.get(id))
+    .filter((node): node is KGNode => Boolean(node))
+    .sort((a, b) => {
+      const typeRank =
+        Object.keys(MAIN_TYPE_QUOTAS).indexOf(a.type) -
+        Object.keys(MAIN_TYPE_QUOTAS).indexOf(b.type);
+      return typeRank || scoreNode(b) - scoreNode(a) || a.label.localeCompare(b.label);
+    });
+
+  const selectedEdges = rawEdges
+    .filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+    .sort((a, b) => {
+      const aWeight = Number.isFinite(a.weight) ? a.weight : 0;
+      const bWeight = Number.isFinite(b.weight) ? b.weight : 0;
+      const aEndpointScore = (scores.get(a.source) ?? 0) + (scores.get(a.target) ?? 0);
+      const bEndpointScore = (scores.get(b.source) ?? 0) + (scores.get(b.target) ?? 0);
+      return bWeight - aWeight || bEndpointScore - aEndpointScore;
+    })
+    .slice(0, SUMMARY_EDGE_LIMIT);
+
+  return { nodes: selectedNodes, edges: selectedEdges };
+}
+
+export function useKnowledgeGraph(displayMode: KGDisplayMode = "summary") {
   console.log("[useKnowledgeGraph] Hook executed, setting up useQuery...");
-  
+
   const query = useQuery({
     queryKey: ["knowledge-graph"],
     queryFn: fetchKnowledgeGraph,
@@ -80,6 +154,16 @@ export function useKnowledgeGraph() {
 
   const rawNodes = query.data?.nodes ?? [];
   const rawEdges = query.data?.edges ?? [];
+  const graphData = useMemo(() => {
+    if (displayMode === "full") {
+      return { nodes: rawNodes, edges: rawEdges };
+    }
+
+    return summarizeGraph(rawNodes, rawEdges);
+  }, [displayMode, rawNodes, rawEdges]);
+
+  const displayNodes = graphData.nodes;
+  const displayEdges = graphData.edges;
 
   console.log("[useKnowledgeGraph] React Query state:", {
     status: query.status,
@@ -91,15 +175,15 @@ export function useKnowledgeGraph() {
   console.log("[useKnowledgeGraph] Received JSON:", query.data);
 
   const flowNodes = useMemo(() => {
-    const nodes = layoutNodes(rawNodes);
+    const nodes = layoutNodes(displayNodes);
     console.log("[useKnowledgeGraph] Fetched raw nodes:", rawNodes.length, rawNodes[0]);
     console.log("[useKnowledgeGraph] Transformed nodes for React Flow:", nodes.length, nodes[0]);
     return nodes;
-  }, [rawNodes]);
+  }, [displayNodes, rawNodes]);
 
   const flowEdges: Edge[] = useMemo(() => {
-    const nodeIds = new Set(rawNodes.map((n) => n.id));
-    const edges = rawEdges
+    const nodeIds = new Set(displayNodes.map((n) => n.id));
+    const edges = displayEdges
       .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e, i) => ({
         id: `edge-${i}`,
@@ -114,11 +198,11 @@ export function useKnowledgeGraph() {
     console.log("[useKnowledgeGraph] Fetched raw edges:", rawEdges.length, rawEdges[0]);
     console.log("[useKnowledgeGraph] Transformed edges for React Flow:", edges.length, edges[0]);
     return edges;
-  }, [rawNodes, rawEdges]);
+  }, [displayNodes, displayEdges, rawEdges]);
 
   const stats = useMemo(
-    () => computeStats(rawNodes, rawEdges.length),
-    [rawNodes, rawEdges]
+    () => computeStats(displayNodes, displayEdges.length),
+    [displayNodes, displayEdges]
   );
 
   const minimapColor = (node: Node) => {
@@ -132,6 +216,10 @@ export function useKnowledgeGraph() {
     stats,
     rawNodes,
     rawEdges,
+    displayRawNodes: displayNodes,
+    displayRawEdges: displayEdges,
+    displayMode,
+    isSummarized: displayMode === "summary" && rawNodes.length > displayNodes.length,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

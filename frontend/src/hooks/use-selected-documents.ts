@@ -25,7 +25,7 @@ export function useSelectedDocuments() {
     if (!filename) return "";
     const parts = filename.split("/").pop()?.split(".") ?? [filename];
     parts.pop();
-    return (parts.join(".") || filename).replace(/\s+/g, "-").toLowerCase();
+    return parts.join(".") || filename;
   };
 
   // If there are no saved selections, default to all known documents (use filename stem)

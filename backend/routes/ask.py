@@ -128,11 +128,26 @@ async def ask_question(request: AskRequest):
     start_time = perf_counter()
 
     try:
-        response = get_rag_pipeline().ask(
+        pipeline = get_rag_pipeline()
+        vdb = pipeline.retrieval_service.vectordb_service
+        emb = pipeline.retrieval_service.embedding_service
+        
+        print(f"collection name: {vdb.collection_name}")
+        print(f"collection count: {vdb.count_documents()}")
+        q_emb = emb.generate_embedding(request.question)
+        print(f"query embedding dimension: {len(q_emb)}")
+        
+        response = pipeline.ask(
                 question=request.question,
                 top_k=request.top_k,
                 document_ids=request.document_ids,
             )
+        
+        chunks = response["retrieval"]["results"]
+        print(f"number of retrieved chunks: {len(chunks)}")
+        if chunks:
+            print(f"retrieved metadata: {chunks[0]['metadata']}")
+            
     except RAGPipelineValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RAGPipelineRetrievalError as exc:

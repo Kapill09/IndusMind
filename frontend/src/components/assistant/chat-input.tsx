@@ -4,6 +4,7 @@ import { Send, Paperclip, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { DocumentSelector } from "@/components/documents/document-selector";
+import { useToast } from "@/components/feedback/toast";
 
 interface ChatInputProps {
   onSubmit: (question: string) => void;
@@ -13,6 +14,15 @@ interface ChatInputProps {
 
 export function ChatInput({ onSubmit, isLoading, error }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const { notify } = useToast();
+
+  const handleComingSoon = () => {
+    notify({
+      tone: "info",
+      title: "Coming soon",
+      description: "This feature will be available in a future update.",
+    });
+  };
 
   const handleSubmit = () => {
     const value = textareaRef.current?.value.trim();
@@ -69,7 +79,7 @@ export function ChatInput({ onSubmit, isLoading, error }: ChatInputProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled
+                onClick={handleComingSoon}
                 className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground"
                 aria-label="Attach file"
                 title="Attach file (coming soon)"
@@ -79,7 +89,7 @@ export function ChatInput({ onSubmit, isLoading, error }: ChatInputProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled
+                onClick={handleComingSoon}
                 className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground"
                 aria-label="Knowledge Graph mode"
                 title="Knowledge Graph mode (coming soon)"

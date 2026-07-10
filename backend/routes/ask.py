@@ -134,6 +134,8 @@ async def ask_question(request: AskRequest):
         
         print(f"collection name: {vdb.collection_name}")
         print(f"collection count: {vdb.count_documents()}")
+        print(f"question: {request.question}")
+        print(f"document_ids in request: {request.document_ids}")
         q_emb = emb.generate_embedding(request.question)
         print(f"query embedding dimension: {len(q_emb)}")
         

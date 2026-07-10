@@ -21,11 +21,15 @@ export function useSelectedDocuments() {
   }, [selected]);
 
   // Helper: derive the vectordb document id from a filename (stem without ext)
+  // The document ID stored in the database is the stem of the filename (filename without the extension)
+  // e.g., "my-document (1).pdf" -> "my-document (1)"
   const filenameToDocId = (filename: string | undefined) => {
     if (!filename) return "";
-    const parts = filename.split("/").pop()?.split(".") ?? [filename];
-    parts.pop();
-    return parts.join(".") || filename;
+    const basename = filename.split("/").pop() || filename;
+    // Remove the last extension only (e.g., .pdf)
+    const lastDotIndex = basename.lastIndexOf(".");
+    if (lastDotIndex === -1) return basename;
+    return basename.substring(0, lastDotIndex);
   };
 
   // If there are no saved selections, default to all known documents (use filename stem)

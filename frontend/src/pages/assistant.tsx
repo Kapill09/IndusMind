@@ -1,20 +1,24 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { Bot, ChevronDown, ChevronRight, Clock3, FileText, Send, Sparkles, UserRound } from "lucide-react";
+import { Send } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { askQuestion } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import type { ChatMessage, RagSource } from "@/types";
-import { Badge } from "@/components/ui/badge";
+import { DocumentSelector } from "@/components/documents/document-selector";
+import { useSelectedDocuments } from "@/hooks/use-selected-documents";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/feedback/toast";
+import type { ChatMessage, RagSource } from "@/types";
+import { EmptyState } from "@/components/assistant/empty-state";
+import { LoadingPipeline } from "@/components/assistant/loading-pipeline";
+import { SourceDrawer } from "@/components/assistant/source-drawer";
+import { ConversationHistory } from "@/components/assistant/conversation-history";
+import { AssistantContentPanel } from "@/components/assistant/assistant-content-panel";
+import { AssistantRightPanel } from "@/components/assistant/assistant-right-panel";
 
 const questionSchema = z.object({
   question: z.string().trim().min(3, "Enter a question for the assistant."),
@@ -31,6 +35,10 @@ interface AssistantPageProps {
 export function AssistantPage({ messages, setMessages, onQuestionAnswered }: AssistantPageProps) {
   const { notify } = useToast();
   const formRef = useRef<HTMLFormElement | null>(null);
+  const conversationEndRef = useRef<HTMLDivElement | null>(null);
+  const [selectedSource, setSelectedSource] = useState<RagSource | null>(null);
+  const { selected: selectedDocumentIds } = useSelectedDocuments();
+
   const {
     register,
     handleSubmit,
@@ -42,7 +50,9 @@ export function AssistantPage({ messages, setMessages, onQuestionAnswered }: Ass
   });
 
   const askMutation = useMutation({
-    mutationFn: (question: string) => askQuestion(question, 5),
+    mutationKey: ["assistant", "ask"],
+    mutationFn: ({ question, documentIds }: { question: string; documentIds?: string[] | null }) =>
+      askQuestion(question, 5, documentIds ?? null),
     onSuccess: (response) => {
       const confidence = estimateConfidence(response.sources);
       setMessages((current) => [
@@ -56,6 +66,8 @@ export function AssistantPage({ messages, setMessages, onQuestionAnswered }: Ass
           confidence,
           latencyMs: response.retrieval_time_ms,
           model: response.model,
+          entities: response.entities,
+          contextChunks: response.context_chunks,
         },
       ]);
       onQuestionAnswered();
@@ -68,21 +80,15 @@ export function AssistantPage({ messages, setMessages, onQuestionAnswered }: Ass
       });
     },
   });
+  const { error: askError, isError: isAskError, isPending: isAsking, mutate: ask } = askMutation;
 
-  const starterPrompts = useMemo(
-    () => [
-      "Summarize this document",
-      "Explain Problem Statement 8",
-      "Find Safety Procedures",
-      "Extract SOP",
-      "Compare Documents",
-      "Find Compliance Rules",
-      "Generate Maintenance Checklist",
-    ],
-    [],
-  );
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [messages.length, isAsking]);
 
-  const onSubmit = handleSubmit(({ question }) => {
+  const submitQuestion = useCallback((question: string) => {
+    if (isAsking) return;
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -90,229 +96,132 @@ export function AssistantPage({ messages, setMessages, onQuestionAnswered }: Ass
       createdAt: new Date(),
     };
     setMessages((current) => [...current, userMessage]);
+    ask({ question, documentIds: selectedDocumentIds });
+  }, [ask, isAsking, selectedDocumentIds, setMessages]);
+
+  const onSubmit = handleSubmit(({ question }) => {
+    submitQuestion(question);
     reset();
-    askMutation.mutate(question);
   });
 
-  const askPrompt = (question: string) => {
-    setMessages((current) => [
-      ...current,
-      { id: crypto.randomUUID(), role: "user", content: question, createdAt: new Date() },
-    ]);
-    askMutation.mutate(question);
-  };
+  const askPrompt = useCallback((question: string) => {
+    submitQuestion(question);
+  }, [submitQuestion]);
+
+  const onNewChat = useCallback(() => {
+    setMessages([]);
+  }, [setMessages]);
+
+  const onReplayQuery = useCallback((query: string) => {
+    askPrompt(query);
+  }, [askPrompt]);
+
+  const handleCopy = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      notify({ tone: "success", title: "Copied", description: "Answer copied to clipboard." });
+    } catch {
+      notify({ tone: "error", title: "Copy failed", description: "Unable to copy text." });
+    }
+  }, [notify]);
+
+  const handleRegenerate = useCallback(() => {
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+    if (lastUserMessage) {
+      askPrompt(lastUserMessage.content);
+    }
+  }, [askPrompt, messages]);
+
+  const handleLike = useCallback(() => {
+    notify({ tone: "success", title: "Feedback recorded", description: "Thanks for your input." });
+  }, [notify]);
+
+  const handleDislike = useCallback(() => {
+    notify({ tone: "error", title: "Feedback recorded", description: "We will improve future responses." });
+  }, [notify]);
+
+  const latestAnswer = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant") ?? null,
+    [messages],
+  );
+  const assistantError = askError instanceof Error
+    ? askError.message
+    : "The assistant could not complete the request.";
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-6xl flex-col">
-      <section className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div>
-          <Badge variant="outline">Grounded industrial assistant</Badge>
-          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.02em] md:text-3xl">AI Assistant</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
-            Ask natural-language questions across manuals, SOPs, inspection reports, and maintenance documentation.
-          </p>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-          Streaming-ready message architecture
-        </div>
-      </section>
+    <div className="mx-auto min-h-[calc(100vh-6rem)] max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(260px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(260px,280px)_minmax(0,1fr)_minmax(260px,300px)]">
+        <ConversationHistory messages={messages} onNewChat={onNewChat} onReplayQuery={onReplayQuery} />
 
-      <Card className="flex flex-1 flex-col overflow-hidden">
-        <CardContent className="flex flex-1 flex-col p-0">
-          <div className="flex-1 space-y-5 overflow-y-auto p-4 md:p-6">
-            {messages.length === 0 ? (
-              <EmptyChat prompts={starterPrompts} onPrompt={askPrompt} disabled={askMutation.isPending} />
-            ) : (
-              messages.map((message) => <ChatBubble key={message.id} message={message} />)
-            )}
-            {askMutation.isPending ? <TypingIndicator /> : null}
-          </div>
+        <main className="flex min-h-0 min-w-0 flex-col gap-4">
+          {messages.length === 0 ? (
+            <Card className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card/95 p-6 shadow-xl shadow-black/10">
+              <CardContent className="flex-1 p-0">
+                <EmptyState onPrompt={askPrompt} disabled={isAsking} />
+              </CardContent>
+            </Card>
+          ) : (
+            <AssistantContentPanel
+              messages={messages}
+              onSourceClick={setSelectedSource}
+              onSuggest={askPrompt}
+              onRegenerate={handleRegenerate}
+              onCopy={handleCopy}
+              onLike={handleLike}
+              onDislike={handleDislike}
+            />
+          )}
+          <div ref={conversationEndRef} />
 
-          <form ref={formRef} onSubmit={onSubmit} className="border-t border-border bg-card p-4">
-            <div className="flex flex-col gap-3 md:flex-row">
-              <div className="flex-1">
-                <Textarea
-                  {...register("question")}
-                  aria-label="Ask INDUS MIND"
-                  placeholder="Ask about maintenance procedures, inspection findings, SOP steps, tables, figures, or problem statements..."
-                  className="min-h-20"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                      formRef.current?.requestSubmit();
-                    }
-                  }}
-                />
-                {errors.question ? (
-                  <p className="mt-2 text-sm text-destructive">{errors.question.message}</p>
-                ) : null}
-              </div>
-              <Button type="submit" className="md:self-end" disabled={askMutation.isPending}>
-                <Send className="h-4 w-4" aria-hidden="true" />
-                Ask
-              </Button>
+          {isAskError ? (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive" role="alert">
+              {assistantError}
             </div>
+          ) : null}
+
+          <form ref={formRef} onSubmit={onSubmit} className="rounded-2xl border border-border bg-card/95 p-4 shadow-xl shadow-black/10">
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+              <Textarea
+                {...register("question")}
+                aria-label="Ask the industrial copilot"
+                placeholder="Ask about equipment, procedures, maintenance records, or compliance standards..."
+                disabled={isAsking}
+                className="min-h-[110px] resize-none bg-background text-foreground placeholder:text-muted-foreground"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    formRef.current?.requestSubmit();
+                  }
+                }}
+              />
+              <div className="flex flex-col items-stretch justify-end gap-3">
+                <DocumentSelector compact />
+                <Button type="submit" size="lg" disabled={isAsking}>
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                  {isAsking ? "Working..." : "Ask Copilot"}
+                </Button>
+              </div>
+            </div>
+            {errors.question ? <p className="mt-3 text-sm text-destructive">{errors.question.message}</p> : null}
           </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
-function EmptyChat({
-  prompts,
-  onPrompt,
-  disabled,
-}: {
-  prompts: string[];
-  onPrompt: (prompt: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-        <Sparkles className="h-6 w-6" aria-hidden="true" />
+          {isAsking ? (
+            <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-xl shadow-black/10">
+              <LoadingPipeline />
+            </div>
+          ) : null}
+        </main>
+
+        <AssistantRightPanel latestAnswer={latestAnswer} onSourceClick={setSelectedSource} onQuickAction={askPrompt} />
       </div>
-      <h2 className="mt-4 text-lg font-semibold">Ready for plant knowledge questions</h2>
-      <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-        Answers are grounded in uploaded documents and include source citations when available.
-      </p>
-      <div className="mt-6 grid w-full max-w-3xl gap-3 md:grid-cols-3">
-        {prompts.map((prompt) => (
-          <button
-            key={prompt}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPrompt(prompt)}
-            className="rounded-lg border border-border bg-background p-4 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function ChatBubble({ message }: { message: ChatMessage }) {
-  const isAssistant = message.role === "assistant";
-
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18 }}
-      className={cn("flex gap-3", isAssistant ? "items-start" : "items-start justify-end")}
-    >
-      {isAssistant ? <BubbleIcon assistant /> : null}
-      <div className={cn("max-w-[880px] rounded-2xl border p-4 shadow-sm", isAssistant ? "bg-card" : "bg-primary text-primary-foreground")}>
-        <div className="whitespace-pre-wrap text-sm leading-7">{message.content}</div>
-        {isAssistant ? <AssistantMetadata message={message} /> : null}
-      </div>
-      {!isAssistant ? <BubbleIcon /> : null}
-    </motion.article>
-  );
-}
-
-function BubbleIcon({ assistant = false }: { assistant?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
-        assistant ? "bg-secondary text-secondary-foreground" : "bg-card text-muted-foreground",
-      )}
-    >
-      {assistant ? <Bot className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
-    </div>
-  );
-}
-
-function AssistantMetadata({ message }: { message: ChatMessage }) {
-  return (
-    <div className="mt-4 space-y-3 border-t border-border pt-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">Confidence {message.confidence ?? 72}%</Badge>
-        {message.latencyMs ? (
-          <Badge variant="outline">
-            <Clock3 className="mr-1 h-3 w-3" aria-hidden="true" />
-            {message.latencyMs} ms
-          </Badge>
-        ) : null}
-        {message.model ? <Badge variant="outline">{message.model}</Badge> : null}
-      </div>
-      {message.sources?.length ? <SourcesList sources={message.sources} /> : null}
-    </div>
-  );
-}
-
-function SourcesList({ sources }: { sources: RagSource[] }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  return (
-    <div className="space-y-2">
-      {sources.slice(0, 4).map((source) => {
-        const filename = String(source.metadata.filename ?? "Uploaded document");
-        const isOpen = expanded === source.chunk_id;
-        return (
-          <div key={source.chunk_id} className="rounded-xl border border-border bg-background/70 p-3">
-            <button
-              type="button"
-              onClick={() => setExpanded(isOpen ? null : source.chunk_id)}
-              className="flex w-full items-start justify-between gap-3 text-left"
-            >
-              <div className="flex min-w-0 items-start gap-2">
-                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">{filename}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {pageLabel(source.page_start, source.page_end)} · score {Math.round((source.score ?? 0.72) * 100)}%
-                  </p>
-                </div>
-              </div>
-              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </button>
-            {isOpen ? (
-              <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">Retrieved chunk excerpt</p>
-                <p className="mt-2">
-                  {source.metadata.heading ? `${source.metadata.heading} — ` : ""}
-                  {source.metadata.title ? `${source.metadata.title} — ` : ""}
-                  Grounded snippet from the uploaded document.
-                </p>
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function TypingIndicator() {
-  return (
-    <div className="flex items-start gap-3">
-      <BubbleIcon assistant />
-      <div className="w-full max-w-xl rounded-lg border bg-card p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-          <span>INDUS MIND is retrieving grounded context</span>
-        </div>
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-11/12" />
-          <Skeleton className="h-3 w-8/12" />
-          <Skeleton className="h-3 w-9/12" />
-        </div>
-      </div>
+      <SourceDrawer source={selectedSource} onClose={() => setSelectedSource(null)} />
     </div>
   );
 }
 
 function estimateConfidence(sources: RagSource[]) {
-  if (!sources.length) return 0;
+  if (!sources || !sources.length) return 0;
   const bestScore = Math.max(...sources.map((source) => source.score ?? 0.72));
   return Math.max(55, Math.min(96, Math.round(bestScore * 100)));
-}
-
-function pageLabel(start: number | null, end: number | null) {
-  if (!start && !end) return "page unknown";
-  if (start && end && start !== end) return `pages ${start}-${end}`;
-  return `page ${start ?? end}`;
 }

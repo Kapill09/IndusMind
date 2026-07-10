@@ -14,14 +14,26 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function askQuestion(question: string, topK = 5): Promise<AskResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/ask`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ question, top_k: topK }),
-  });
+export async function askQuestion(
+  question: string,
+  topK = 5,
+  documentIds?: string[] | null,
+): Promise<AskResponse> {
+  const body: Record<string, unknown> = { question, top_k: topK };
+  if (documentIds && documentIds.length > 0) body.document_ids = documentIds;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/ask`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Unable to reach the assistant API. Check that the backend server is running.");
+  }
 
   return parseJsonResponse<AskResponse>(response);
 }

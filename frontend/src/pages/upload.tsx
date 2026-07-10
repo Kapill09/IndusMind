@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, FileUp, Layers3, Loader2, UploadCloud, XCircle } from "lucide-react";
 import { uploadDocument } from "@/lib/api";
@@ -32,6 +32,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [pipelineStage, setPipelineStage] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadDocument(file, setProgress),
@@ -44,6 +45,8 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
       setProgress(100);
       setPipelineStage(pipelineSteps.length - 1);
       onUploaded(response);
+      // Ensure the knowledge graph and related caches refresh after ingestion
+      queryClient.invalidateQueries({ queryKey: ["knowledge-graph"] });
       notify({
         tone: "success",
         title: "Document indexed",
@@ -125,7 +128,7 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
   const elapsedSeconds = useMemo(() => {
     if (!startedAt) return 0;
     return Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-  }, [startedAt, result]);
+  }, [startedAt]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

@@ -1,0 +1,408 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/assistant/assistant-right-panel.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=0e5c6929"; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+let prevRefreshReg;
+let prevRefreshSig;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = RefreshRuntime.getRefreshReg("D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx");
+  window.$RefreshSig$ = RefreshRuntime.createSignatureFunctionForTransform;
+}
+import __vite__cjsImport3_react from "/node_modules/.vite/deps/react.js?v=0e5c6929"; const memo = __vite__cjsImport3_react["memo"];
+import { motion } from "/node_modules/.vite/deps/framer-motion.js?v=452af0e5";
+import { ArrowRight, Clock3, Database, FileText, Layers, Sparkles } from "/node_modules/.vite/deps/lucide-react.js?v=46bc4fa7";
+import { Badge } from "/src/components/ui/badge.tsx";
+import { Button } from "/src/components/ui/button.tsx";
+import { Card } from "/src/components/ui/card.tsx";
+import { ConfidenceBadge } from "/src/components/assistant/confidence-badge.tsx";
+import { QUICK_ACTIONS } from "/src/components/assistant/assistant-constants.ts";
+import { formatMilliseconds } from "/src/lib/utils.ts";
+export const AssistantRightPanel = memo(_c = function AssistantRightPanel2({
+  latestAnswer,
+  onSourceClick,
+  onQuickAction
+}) {
+  const sources = latestAnswer?.sources ?? [];
+  const topSources = sources.slice(0, 3);
+  return /* @__PURE__ */ jsxDEV("aside", { className: "flex h-full min-h-[calc(100vh-6rem)] flex-col gap-4 rounded-2xl border border-border bg-card/95 p-4 shadow-xl shadow-black/10 backdrop-blur-xl", children: [
+    /* @__PURE__ */ jsxDEV("div", { className: "space-y-3", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Workspace insights" }, void 0, false, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 50,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("h2", { className: "mt-1 text-xl font-semibold text-foreground", children: "Sources & Metrics" }, void 0, false, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 51,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 49,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV(Badge, { variant: "outline", className: "bg-muted/30 text-muted-foreground", children: latestAnswer ? "Live" : "Idle" }, void 0, false, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 53,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 48,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(Card, { className: "space-y-4 rounded-2xl border-border bg-muted/20 p-4 shadow-none", children: [
+        /* @__PURE__ */ jsxDEV("div", { className: "flex items-center justify-between gap-3", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Latest answer" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 61,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { className: "mt-2 text-sm font-semibold text-foreground", children: latestAnswer ? "Operational summary" : "No answer yet" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 62,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 60,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "flex flex-col items-end gap-2", children: [
+            /* @__PURE__ */ jsxDEV(Badge, { variant: "outline", className: "bg-background text-muted-foreground", children: [
+              sources.length,
+              " sources"
+            ] }, void 0, true, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 67,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV(Badge, { variant: "outline", className: "max-w-40 truncate bg-background text-muted-foreground", children: latestAnswer?.model ?? "Model unavailable" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 70,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 66,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 59,
+          columnNumber: 11
+        }, this),
+        latestAnswer ? /* @__PURE__ */ jsxDEV("div", { className: "grid gap-3 sm:grid-cols-2", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "rounded-2xl border border-border bg-background p-3", children: [
+            /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Confidence" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 79,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "mt-2 flex items-center gap-2", children: /* @__PURE__ */ jsxDEV(ConfidenceBadge, { confidence: latestAnswer.confidence ?? 0 }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 81,
+              columnNumber: 19
+            }, this) }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 80,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 78,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "rounded-2xl border border-border bg-background p-3", children: [
+            /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Latency" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 85,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { className: "mt-2 text-lg font-semibold text-foreground", children: formatMilliseconds(latestAnswer.latencyMs ?? 0) }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 86,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 84,
+            columnNumber: 15
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 77,
+          columnNumber: 11
+        }, this) : /* @__PURE__ */ jsxDEV("div", { className: "rounded-2xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground", children: "Metrics appear here after the assistant returns an answer." }, void 0, false, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 92,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 58,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+      lineNumber: 47,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "space-y-3", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Retrieved context" }, void 0, false, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 102,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("h3", { className: "mt-1 text-base font-semibold text-foreground", children: "Top grounded sources" }, void 0, false, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 103,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 101,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { className: "text-xs text-muted-foreground", children: "Click to inspect" }, void 0, false, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 105,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 100,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "space-y-3", children: topSources.length === 0 ? /* @__PURE__ */ jsxDEV("div", { className: "rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground", children: "Retrieved source snippets will appear here after an answer is generated." }, void 0, false, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 110,
+        columnNumber: 11
+      }, this) : topSources.map(
+        (source) => /* @__PURE__ */ jsxDEV(
+          "button",
+          {
+            type: "button",
+            onClick: () => onSourceClick(source),
+            className: "group flex w-full flex-col gap-3 rounded-2xl border border-border bg-background p-4 text-left transition hover:border-primary hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            children: [
+              /* @__PURE__ */ jsxDEV("div", { className: "flex items-center justify-between gap-3", children: [
+                /* @__PURE__ */ jsxDEV("div", { className: "min-w-0", children: [
+                  /* @__PURE__ */ jsxDEV("p", { className: "truncate text-sm font-semibold text-foreground", children: source.metadata.heading || source.metadata.title || "Document source" }, void 0, false, {
+                    fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                    lineNumber: 123,
+                    columnNumber: 21
+                  }, this),
+                  /* @__PURE__ */ jsxDEV("p", { className: "mt-1 truncate text-xs text-muted-foreground", children: [
+                    source.metadata.filename ?? "Unknown document",
+                    " / Page ",
+                    source.page_start ?? "unknown"
+                  ] }, void 0, true, {
+                    fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                    lineNumber: 126,
+                    columnNumber: 21
+                  }, this)
+                ] }, void 0, true, {
+                  fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                  lineNumber: 122,
+                  columnNumber: 19
+                }, this),
+                /* @__PURE__ */ jsxDEV(FileText, { className: "h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-primary", "aria-hidden": "true" }, void 0, false, {
+                  fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                  lineNumber: 130,
+                  columnNumber: 19
+                }, this)
+              ] }, void 0, true, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 121,
+                columnNumber: 17
+              }, this),
+              /* @__PURE__ */ jsxDEV("p", { className: "line-clamp-3 text-sm leading-6 text-muted-foreground", children: source.text ?? "No snippet available." }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 132,
+                columnNumber: 17
+              }, this)
+            ]
+          },
+          source.chunk_id,
+          true,
+          {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 115,
+            columnNumber: 11
+          },
+          this
+        )
+      ) }, void 0, false, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 108,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+      lineNumber: 99,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "space-y-3", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "flex items-center justify-between gap-3", children: [
+        /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground", children: "Quick actions" }, void 0, false, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 143,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV(ArrowRight, { className: "h-4 w-4 text-muted-foreground", "aria-hidden": "true" }, void 0, false, {
+          fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+          lineNumber: 144,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 142,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2", children: QUICK_ACTIONS.map(
+        (action) => /* @__PURE__ */ jsxDEV(
+          Button,
+          {
+            variant: "outline",
+            size: "sm",
+            onClick: () => onQuickAction(action),
+            className: "h-auto min-h-8 justify-start whitespace-normal rounded-xl text-left hover:border-primary",
+            children: [
+              /* @__PURE__ */ jsxDEV(Sparkles, { className: "h-4 w-4 shrink-0 text-primary", "aria-hidden": "true" }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 155,
+                columnNumber: 15
+              }, this),
+              action
+            ]
+          },
+          action,
+          true,
+          {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 148,
+            columnNumber: 11
+          },
+          this
+        )
+      ) }, void 0, false, {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 146,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+      lineNumber: 141,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV(
+      motion.div,
+      {
+        initial: { opacity: 0, y: 16 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.28 },
+        className: "rounded-2xl border border-border bg-muted/20 p-4",
+        children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "flex items-center gap-2 text-muted-foreground", children: [
+            /* @__PURE__ */ jsxDEV(Layers, { className: "h-4 w-4 text-primary", "aria-hidden": "true" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 169,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("p", { className: "text-xs font-semibold uppercase tracking-[0.18em]", children: "System status" }, void 0, false, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 170,
+              columnNumber: 11
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 168,
+            columnNumber: 9
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "mt-3 space-y-2 text-sm text-muted-foreground", children: [
+            /* @__PURE__ */ jsxDEV("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxDEV(Database, { className: "h-4 w-4 shrink-0", "aria-hidden": "true" }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 174,
+                columnNumber: 13
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: "Knowledge indexed from approved documents" }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 175,
+                columnNumber: 13
+              }, this)
+            ] }, void 0, true, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 173,
+              columnNumber: 11
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ jsxDEV(Clock3, { className: "h-4 w-4 shrink-0", "aria-hidden": "true" }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 178,
+                columnNumber: 13
+              }, this),
+              /* @__PURE__ */ jsxDEV("span", { children: "Response lifecycle tracked with operational transparency" }, void 0, false, {
+                fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+                lineNumber: 179,
+                columnNumber: 13
+              }, this)
+            ] }, void 0, true, {
+              fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+              lineNumber: 177,
+              columnNumber: 11
+            }, this)
+          ] }, void 0, true, {
+            fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+            lineNumber: 172,
+            columnNumber: 9
+          }, this)
+        ]
+      },
+      void 0,
+      true,
+      {
+        fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+        lineNumber: 162,
+        columnNumber: 7
+      },
+      this
+    )
+  ] }, void 0, true, {
+    fileName: "D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx",
+    lineNumber: 46,
+    columnNumber: 5
+  }, this);
+});
+_c2 = AssistantRightPanel;
+var _c, _c2;
+$RefreshReg$(_c, "AssistantRightPanel$memo");
+$RefreshReg$(_c2, "AssistantRightPanel");
+if (import.meta.hot && !inWebWorker) {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+if (import.meta.hot && !inWebWorker) {
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("D:/Projects/IndusMind/frontend/src/components/assistant/assistant-right-panel.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+
+//# sourceMappingURL=data:application/json;base64,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LHFDQUFDLFVBQU8sV0FBVSxvQkFBbUIsZUFBWSxVQUFqRDtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUF1RDtBQUFBLGNBQ3ZELHVCQUFDLFVBQUssd0VBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSxxQkFBOEQ7QUFBQSxpQkFGaEU7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFHQTtBQUFBLGVBUkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFTQTtBQUFBO0FBQUE7QUFBQSxNQW5CRjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsSUFvQkE7QUFBQSxPQXhJRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBeUlBO0FBRUosQ0FBQztBQUFFQyxNQXBKVXpCO0FBQW1CLElBQUFDLElBQUF3QjtBQUFBLGFBQUF4QixJQUFBO0FBQUEsYUFBQXdCLEtBQUEiLCJuYW1lcyI6WyJtZW1vIiwibW90aW9uIiwiQXJyb3dSaWdodCIsIkNsb2NrMyIsIkRhdGFiYXNlIiwiRmlsZVRleHQiLCJMYXllcnMiLCJTcGFya2xlcyIsIkJhZGdlIiwiQnV0dG9uIiwiQ2FyZCIsIkNvbmZpZGVuY2VCYWRnZSIsIlFVSUNLX0FDVElPTlMiLCJmb3JtYXRNaWxsaXNlY29uZHMiLCJBc3Npc3RhbnRSaWdodFBhbmVsIiwiX2MiLCJsYXRlc3RBbnN3ZXIiLCJvblNvdXJjZUNsaWNrIiwib25RdWlja0FjdGlvbiIsInNvdXJjZXMiLCJ0b3BTb3VyY2VzIiwic2xpY2UiLCJsZW5ndGgiLCJtb2RlbCIsImNvbmZpZGVuY2UiLCJsYXRlbmN5TXMiLCJtYXAiLCJzb3VyY2UiLCJtZXRhZGF0YSIsImhlYWRpbmciLCJ0aXRsZSIsImZpbGVuYW1lIiwicGFnZV9zdGFydCIsInRleHQiLCJjaHVua19pZCIsImFjdGlvbiIsIm9wYWNpdHkiLCJ5IiwiZHVyYXRpb24iLCJfYzIiXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiYXNzaXN0YW50LXJpZ2h0LXBhbmVsLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyBtZW1vIH0gZnJvbSBcInJlYWN0XCI7XG5pbXBvcnQgeyBtb3Rpb24gfSBmcm9tIFwiZnJhbWVyLW1vdGlvblwiO1xuaW1wb3J0IHsgQXJyb3dSaWdodCwgQ2xvY2szLCBEYXRhYmFzZSwgRmlsZVRleHQsIExheWVycywgU3BhcmtsZXMgfSBmcm9tIFwibHVjaWRlLXJlYWN0XCI7XG5pbXBvcnQgeyBCYWRnZSB9IGZyb20gXCJAL2NvbXBvbmVudHMvdWkvYmFkZ2VcIjtcbmltcG9ydCB7IEJ1dHRvbiB9IGZyb20gXCJAL2NvbXBvbmVudHMvdWkvYnV0dG9uXCI7XG5pbXBvcnQgeyBDYXJkIH0gZnJvbSBcIkAvY29tcG9uZW50cy91aS9jYXJkXCI7XG5pbXBvcnQgeyBDb25maWRlbmNlQmFkZ2UgfSBmcm9tIFwiQC9jb21wb25lbnRzL2Fzc2lzdGFudC9jb25maWRlbmNlLWJhZGdlXCI7XG5pbXBvcnQgeyBRVUlDS19BQ1RJT05TIH0gZnJvbSBcIkAvY29tcG9uZW50cy9hc3Npc3RhbnQvYXNzaXN0YW50LWNvbnN0YW50c1wiO1xuaW1wb3J0IHR5cGUgeyBDaGF0TWVzc2FnZSwgUmFnU291cmNlIH0gZnJvbSBcIkAvdHlwZXNcIjtcbmltcG9ydCB7IGZvcm1hdE1pbGxpc2Vjb25kcyB9IGZyb20gXCJAL2xpYi91dGlsc1wiO1xuXG5pbnRlcmZhY2UgQXNzaXN0YW50UmlnaHRQYW5lbFByb3BzIHtcbiAgbGF0ZXN0QW5zd2VyOiBDaGF0TWVzc2FnZSB8IG51bGw7XG4gIG9uU291cmNlQ2xpY2s6IChzb3VyY2U6IFJhZ1NvdXJjZSkgPT4gdm9pZDtcbiAgb25RdWlja0FjdGlvbjogKHN1Z2dlc3Rpb246IHN0cmluZykgPT4gdm9pZDtcbn1cblxuZXhwb3J0IGNvbnN0IEFzc2lzdGFudFJpZ2h0UGFuZWwgPSBtZW1vKGZ1bmN0aW9uIEFzc2lzdGFudFJpZ2h0UGFuZWwoe1xuICBsYXRlc3RBbnN3ZXIsXG4gIG9uU291cmNlQ2xpY2ssXG4gIG9uUXVpY2tBY3Rpb24sXG59OiBBc3Npc3RhbnRSaWdodFBhbmVsUHJvcHMpIHtcbiAgY29uc3Qgc291cmNlcyA9IGxhdGVzdEFuc3dlcj8uc291cmNlcyA/PyBbXTtcbiAgY29uc3QgdG9wU291cmNlcyA9IHNvdXJjZXMuc2xpY2UoMCwgMyk7XG5cbiAgcmV0dXJuIChcbiAgICA8YXNpZGUgY2xhc3NOYW1lPVwiZmxleCBoLWZ1bGwgbWluLWgtW2NhbGMoMTAwdmgtNnJlbSldIGZsZXgtY29sIGdhcC00IHJvdW5kZWQtMnhsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQvOTUgcC00IHNoYWRvdy14bCBzaGFkb3ctYmxhY2svMTAgYmFja2Ryb3AtYmx1ci14bFwiPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJzcGFjZS15LTNcIj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gZ2FwLTNcIj5cbiAgICAgICAgICA8ZGl2PlxuICAgICAgICAgICAgPHAgY2xhc3NOYW1lPVwidGV4dC14cyBmb250LXNlbWlib2xkIHVwcGVyY2FzZSB0cmFja2luZy1bMC4xOGVtXSB0ZXh0LW11dGVkLWZvcmVncm91bmRcIj5Xb3Jrc3BhY2UgaW5zaWdodHM8L3A+XG4gICAgICAgICAgICA8aDIgY2xhc3NOYW1lPVwibXQtMSB0ZXh0LXhsIGZvbnQtc2VtaWJvbGQgdGV4dC1mb3JlZ3JvdW5kXCI+U291cmNlcyAmIE1ldHJpY3M8L2gyPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDxCYWRnZSB2YXJpYW50PVwib3V0bGluZVwiIGNsYXNzTmFtZT1cImJnLW11dGVkLzMwIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAge2xhdGVzdEFuc3dlciA/IFwiTGl2ZVwiIDogXCJJZGxlXCJ9XG4gICAgICAgICAgPC9CYWRnZT5cbiAgICAgICAgPC9kaXY+XG5cbiAgICAgICAgPENhcmQgY2xhc3NOYW1lPVwic3BhY2UteS00IHJvdW5kZWQtMnhsIGJvcmRlci1ib3JkZXIgYmctbXV0ZWQvMjAgcC00IHNoYWRvdy1ub25lXCI+XG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gZ2FwLTNcIj5cbiAgICAgICAgICAgIDxkaXY+XG4gICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT1cInRleHQteHMgZm9udC1zZW1pYm9sZCB1cHBlcmNhc2UgdHJhY2tpbmctWzAuMThlbV0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kXCI+TGF0ZXN0IGFuc3dlcjwvcD5cbiAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPVwibXQtMiB0ZXh0LXNtIGZvbnQtc2VtaWJvbGQgdGV4dC1mb3JlZ3JvdW5kXCI+XG4gICAgICAgICAgICAgICAge2xhdGVzdEFuc3dlciA/IFwiT3BlcmF0aW9uYWwgc3VtbWFyeVwiIDogXCJObyBhbnN3ZXIgeWV0XCJ9XG4gICAgICAgICAgICAgIDwvcD5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGZsZXgtY29sIGl0ZW1zLWVuZCBnYXAtMlwiPlxuICAgICAgICAgICAgICA8QmFkZ2UgdmFyaWFudD1cIm91dGxpbmVcIiBjbGFzc05hbWU9XCJiZy1iYWNrZ3JvdW5kIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAgICAgIHtzb3VyY2VzLmxlbmd0aH0gc291cmNlc1xuICAgICAgICAgICAgICA8L0JhZGdlPlxuICAgICAgICAgICAgICA8QmFkZ2UgdmFyaWFudD1cIm91dGxpbmVcIiBjbGFzc05hbWU9XCJtYXgtdy00MCB0cnVuY2F0ZSBiZy1iYWNrZ3JvdW5kIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAgICAgIHtsYXRlc3RBbnN3ZXI/Lm1vZGVsID8/IFwiTW9kZWwgdW5hdmFpbGFibGVcIn1cbiAgICAgICAgICAgICAgPC9CYWRnZT5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuXG4gICAgICAgICAge2xhdGVzdEFuc3dlciA/IChcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZ3JpZCBnYXAtMyBzbTpncmlkLWNvbHMtMlwiPlxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInJvdW5kZWQtMnhsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWJhY2tncm91bmQgcC0zXCI+XG4gICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPVwidGV4dC14cyBmb250LXNlbWlib2xkIHVwcGVyY2FzZSB0cmFja2luZy1bMC4xOGVtXSB0ZXh0LW11dGVkLWZvcmVncm91bmRcIj5Db25maWRlbmNlPC9wPlxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwibXQtMiBmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMlwiPlxuICAgICAgICAgICAgICAgICAgPENvbmZpZGVuY2VCYWRnZSBjb25maWRlbmNlPXtsYXRlc3RBbnN3ZXIuY29uZmlkZW5jZSA/PyAwfSAvPlxuICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJyb3VuZGVkLTJ4bCBib3JkZXIgYm9yZGVyLWJvcmRlciBiZy1iYWNrZ3JvdW5kIHAtM1wiPlxuICAgICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT1cInRleHQteHMgZm9udC1zZW1pYm9sZCB1cHBlcmNhc2UgdHJhY2tpbmctWzAuMThlbV0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kXCI+TGF0ZW5jeTwvcD5cbiAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9XCJtdC0yIHRleHQtbGcgZm9udC1zZW1pYm9sZCB0ZXh0LWZvcmVncm91bmRcIj5cbiAgICAgICAgICAgICAgICAgIHtmb3JtYXRNaWxsaXNlY29uZHMobGF0ZXN0QW5zd2VyLmxhdGVuY3lNcyA/PyAwKX1cbiAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgKSA6IChcbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwicm91bmRlZC0yeGwgYm9yZGVyIGJvcmRlci1kYXNoZWQgYm9yZGVyLWJvcmRlciBiZy1iYWNrZ3JvdW5kIHAtNCB0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAgICBNZXRyaWNzIGFwcGVhciBoZXJlIGFmdGVyIHRoZSBhc3Npc3RhbnQgcmV0dXJucyBhbiBhbnN3ZXIuXG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICApfVxuICAgICAgICA8L0NhcmQ+XG4gICAgICA8L2Rpdj5cblxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJzcGFjZS15LTNcIj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gZ2FwLTNcIj5cbiAgICAgICAgICA8ZGl2PlxuICAgICAgICAgICAgPHAgY2xhc3NOYW1lPVwidGV4dC14cyBmb250LXNlbWlib2xkIHVwcGVyY2FzZSB0cmFja2luZy1bMC4xOGVtXSB0ZXh0LW11dGVkLWZvcmVncm91bmRcIj5SZXRyaWV2ZWQgY29udGV4dDwvcD5cbiAgICAgICAgICAgIDxoMyBjbGFzc05hbWU9XCJtdC0xIHRleHQtYmFzZSBmb250LXNlbWlib2xkIHRleHQtZm9yZWdyb3VuZFwiPlRvcCBncm91bmRlZCBzb3VyY2VzPC9oMz5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9XCJ0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPkNsaWNrIHRvIGluc3BlY3Q8L3NwYW4+XG4gICAgICAgIDwvZGl2PlxuXG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwic3BhY2UteS0zXCI+XG4gICAgICAgICAge3RvcFNvdXJjZXMubGVuZ3RoID09PSAwID8gKFxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJyb3VuZGVkLTJ4bCBib3JkZXIgYm9yZGVyLWRhc2hlZCBib3JkZXItYm9yZGVyIGJnLW11dGVkLzIwIHAtNCB0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAgICBSZXRyaWV2ZWQgc291cmNlIHNuaXBwZXRzIHdpbGwgYXBwZWFyIGhlcmUgYWZ0ZXIgYW4gYW5zd2VyIGlzIGdlbmVyYXRlZC5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICkgOiAoXG4gICAgICAgICAgICB0b3BTb3VyY2VzLm1hcCgoc291cmNlKSA9PiAoXG4gICAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcbiAgICAgICAgICAgICAgICBrZXk9e3NvdXJjZS5jaHVua19pZH1cbiAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBvblNvdXJjZUNsaWNrKHNvdXJjZSl9XG4gICAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiZ3JvdXAgZmxleCB3LWZ1bGwgZmxleC1jb2wgZ2FwLTMgcm91bmRlZC0yeGwgYm9yZGVyIGJvcmRlci1ib3JkZXIgYmctYmFja2dyb3VuZCBwLTQgdGV4dC1sZWZ0IHRyYW5zaXRpb24gaG92ZXI6Ym9yZGVyLXByaW1hcnkgaG92ZXI6YmctbXV0ZWQvNDAgZm9jdXMtdmlzaWJsZTpvdXRsaW5lLW5vbmUgZm9jdXMtdmlzaWJsZTpyaW5nLTIgZm9jdXMtdmlzaWJsZTpyaW5nLXJpbmdcIlxuICAgICAgICAgICAgICA+XG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gZ2FwLTNcIj5cbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwibWluLXctMFwiPlxuICAgICAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9XCJ0cnVuY2F0ZSB0ZXh0LXNtIGZvbnQtc2VtaWJvbGQgdGV4dC1mb3JlZ3JvdW5kXCI+XG4gICAgICAgICAgICAgICAgICAgICAge3NvdXJjZS5tZXRhZGF0YS5oZWFkaW5nIHx8IHNvdXJjZS5tZXRhZGF0YS50aXRsZSB8fCBcIkRvY3VtZW50IHNvdXJjZVwifVxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT1cIm10LTEgdHJ1bmNhdGUgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmRcIj5cbiAgICAgICAgICAgICAgICAgICAgICB7c291cmNlLm1ldGFkYXRhLmZpbGVuYW1lID8/IFwiVW5rbm93biBkb2N1bWVudFwifSAvIFBhZ2Uge3NvdXJjZS5wYWdlX3N0YXJ0ID8/IFwidW5rbm93blwifVxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICAgIDxGaWxlVGV4dCBjbGFzc05hbWU9XCJoLTQgdy00IHNocmluay0wIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCB0cmFuc2l0aW9uIGdyb3VwLWhvdmVyOnRleHQtcHJpbWFyeVwiIGFyaWEtaGlkZGVuPVwidHJ1ZVwiIC8+XG4gICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPVwibGluZS1jbGFtcC0zIHRleHQtc20gbGVhZGluZy02IHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgICAgICAgICAge3NvdXJjZS50ZXh0ID8/IFwiTm8gc25pcHBldCBhdmFpbGFibGUuXCJ9XG4gICAgICAgICAgICAgICAgPC9wPlxuICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgICkpXG4gICAgICAgICAgKX1cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cblxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJzcGFjZS15LTNcIj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gZ2FwLTNcIj5cbiAgICAgICAgICA8cCBjbGFzc05hbWU9XCJ0ZXh0LXhzIGZvbnQtc2VtaWJvbGQgdXBwZXJjYXNlIHRyYWNraW5nLVswLjE4ZW1dIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlF1aWNrIGFjdGlvbnM8L3A+XG4gICAgICAgICAgPEFycm93UmlnaHQgY2xhc3NOYW1lPVwiaC00IHctNCB0ZXh0LW11dGVkLWZvcmVncm91bmRcIiBhcmlhLWhpZGRlbj1cInRydWVcIiAvPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJncmlkIGdhcC0yIHNtOmdyaWQtY29scy0yIHhsOmdyaWQtY29scy0xIDJ4bDpncmlkLWNvbHMtMlwiPlxuICAgICAgICAgIHtRVUlDS19BQ1RJT05TLm1hcCgoYWN0aW9uKSA9PiAoXG4gICAgICAgICAgICA8QnV0dG9uXG4gICAgICAgICAgICAgIGtleT17YWN0aW9ufVxuICAgICAgICAgICAgICB2YXJpYW50PVwib3V0bGluZVwiXG4gICAgICAgICAgICAgIHNpemU9XCJzbVwiXG4gICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IG9uUXVpY2tBY3Rpb24oYWN0aW9uKX1cbiAgICAgICAgICAgICAgY2xhc3NOYW1lPVwiaC1hdXRvIG1pbi1oLTgganVzdGlmeS1zdGFydCB3aGl0ZXNwYWNlLW5vcm1hbCByb3VuZGVkLXhsIHRleHQtbGVmdCBob3Zlcjpib3JkZXItcHJpbWFyeVwiXG4gICAgICAgICAgICA+XG4gICAgICAgICAgICAgIDxTcGFya2xlcyBjbGFzc05hbWU9XCJoLTQgdy00IHNocmluay0wIHRleHQtcHJpbWFyeVwiIGFyaWEtaGlkZGVuPVwidHJ1ZVwiIC8+XG4gICAgICAgICAgICAgIHthY3Rpb259XG4gICAgICAgICAgICA8L0J1dHRvbj5cbiAgICAgICAgICApKX1cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cblxuICAgICAgPG1vdGlvbi5kaXZcbiAgICAgICAgaW5pdGlhbD17eyBvcGFjaXR5OiAwLCB5OiAxNiB9fVxuICAgICAgICBhbmltYXRlPXt7IG9wYWNpdHk6IDEsIHk6IDAgfX1cbiAgICAgICAgdHJhbnNpdGlvbj17eyBkdXJhdGlvbjogMC4yOCB9fVxuICAgICAgICBjbGFzc05hbWU9XCJyb3VuZGVkLTJ4bCBib3JkZXIgYm9yZGVyLWJvcmRlciBiZy1tdXRlZC8yMCBwLTRcIlxuICAgICAgPlxuICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cImZsZXggaXRlbXMtY2VudGVyIGdhcC0yIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgIDxMYXllcnMgY2xhc3NOYW1lPVwiaC00IHctNCB0ZXh0LXByaW1hcnlcIiBhcmlhLWhpZGRlbj1cInRydWVcIiAvPlxuICAgICAgICAgIDxwIGNsYXNzTmFtZT1cInRleHQteHMgZm9udC1zZW1pYm9sZCB1cHBlcmNhc2UgdHJhY2tpbmctWzAuMThlbV1cIj5TeXN0ZW0gc3RhdHVzPC9wPlxuICAgICAgICA8L2Rpdj5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJtdC0zIHNwYWNlLXktMiB0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZFwiPlxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTJcIj5cbiAgICAgICAgICAgIDxEYXRhYmFzZSBjbGFzc05hbWU9XCJoLTQgdy00IHNocmluay0wXCIgYXJpYS1oaWRkZW49XCJ0cnVlXCIgLz5cbiAgICAgICAgICAgIDxzcGFuPktub3dsZWRnZSBpbmRleGVkIGZyb20gYXBwcm92ZWQgZG9jdW1lbnRzPC9zcGFuPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTJcIj5cbiAgICAgICAgICAgIDxDbG9jazMgY2xhc3NOYW1lPVwiaC00IHctNCBzaHJpbmstMFwiIGFyaWEtaGlkZGVuPVwidHJ1ZVwiIC8+XG4gICAgICAgICAgICA8c3Bhbj5SZXNwb25zZSBsaWZlY3ljbGUgdHJhY2tlZCB3aXRoIG9wZXJhdGlvbmFsIHRyYW5zcGFyZW5jeTwvc3Bhbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L21vdGlvbi5kaXY+XG4gICAgPC9hc2lkZT5cbiAgKTtcbn0pO1xuIl0sImZpbGUiOiJEOi9Qcm9qZWN0cy9JbmR1c01pbmQvZnJvbnRlbmQvc3JjL2NvbXBvbmVudHMvYXNzaXN0YW50L2Fzc2lzdGFudC1yaWdodC1wYW5lbC50c3gifQ==

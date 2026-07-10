@@ -48,6 +48,10 @@ class AskRequest(BaseModel):
         description="Maximum number of relevant chunks to return.",
         examples=[5],
     )
+    document_ids: list[str] | None = Field(
+        default=None,
+        description="Optional list of document IDs to restrict retrieval to specific sources.",
+    )
 
 
 # -----------------------------
@@ -125,9 +129,10 @@ async def ask_question(request: AskRequest):
 
     try:
         response = get_rag_pipeline().ask(
-            question=request.question,
-            top_k=request.top_k,
-        )
+                question=request.question,
+                top_k=request.top_k,
+                document_ids=request.document_ids,
+            )
     except RAGPipelineValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RAGPipelineRetrievalError as exc:
@@ -159,4 +164,6 @@ async def ask_question(request: AskRequest):
         "retrieval_time_ms": total_time_ms,
         "total_results": len(response["retrieval"]["results"]),
         "sources": response["sources"],
+        "entities": response["entities"],
+        "context_chunks": response["context_chunks"],
     }

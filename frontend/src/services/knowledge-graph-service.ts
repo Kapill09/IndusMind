@@ -8,8 +8,9 @@ const REQUEST_TIMEOUT_MS = 30_000;
  * Fetch the full knowledge graph from the backend.
  * Gracefully returns an empty graph if the backend is unreachable.
  */
-export async function fetchKnowledgeGraph(): Promise<KGApiResponse> {
-  const url = `${API_BASE_URL}/knowledge-graph`;
+export async function fetchKnowledgeGraph(documentIds?: string[] | null): Promise<KGApiResponse> {
+  const params = documentIds && documentIds.length ? `?${documentIds.map((id) => `document_ids=${encodeURIComponent(id)}`).join("&")}` : "";
+  const url = `${API_BASE_URL}/knowledge-graph${params}`;
   console.log("[fetchKnowledgeGraph] Request URL:", url);
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => {

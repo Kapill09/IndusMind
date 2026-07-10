@@ -49,11 +49,14 @@ class KnowledgeGraphService:
         self.document_service = document_service or DocumentService()
         self.compiled_entity_patterns = self._compile_entity_patterns()
 
-    def build_graph(self) -> dict[str, list[dict[str, Any]]]:
+    def build_graph(self, document_ids: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
         """Construct a JSON graph with nodes and edges derived from indexed chunks."""
 
         try:
-            chunks = self.document_service.vectordb_service.get_chunks()
+            where = None
+            if document_ids:
+                where = {"document_id": {"$in": document_ids}}
+            chunks = self.document_service.vectordb_service.get_chunks(where=where)
         except Exception as exc:
             logger.exception("Failed to read chunks for knowledge graph")
             raise KnowledgeGraphServiceError("Unable to read vector chunks for knowledge graph construction.") from exc

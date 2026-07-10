@@ -177,7 +177,7 @@ class VectorDBService:
         )
         return formatted
 
-    def get_chunks(self, limit: int | None = None) -> list[VectorSearchResult]:
+    def get_chunks(self, limit: int | None = None, where: dict[str, Any] | None = None) -> list[VectorSearchResult]:
         """Return stored chunks with text and metadata for local hybrid scoring."""
 
         if limit is not None and limit <= 0:
@@ -189,6 +189,10 @@ class VectorDBService:
             }
             if limit is not None:
                 get_args["limit"] = limit
+            # allow optional metadata filtering
+            # callers may pass a `where` dict to restrict returned chunks
+            if where is not None:
+                get_args["where"] = where
 
             results = self.collection.get(**get_args)
         except Exception as exc:

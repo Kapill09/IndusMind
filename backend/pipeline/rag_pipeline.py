@@ -1,4 +1,5 @@
 import logging
+import re
 from time import perf_counter
 from typing import Any, TypedDict
 
@@ -8,11 +9,47 @@ from backend.services.retrieval_service import RetrievalService, RetrievalServic
 
 logger = logging.getLogger(__name__)
 
+# Lightweight entity patterns reused from the knowledge graph service.
+_ENTITY_PATTERNS: dict[str, list[str]] = {
+    "Equipment": [
+        r"\b(pump|compressor|valve|motor|gearbox|turbine|reactor|boiler|conveyor|generator|sensor|controller|actuator|vessel|pipeline|drill|engine)\b",
+    ],
+    "Safety": [
+        r"\b(safety|hazard|risk|lockout|tagout|ppe|incident|accident|emergency)\b",
+    ],
+    "Maintenance": [
+        r"\b(maintenance|inspection|lubrication|calibration|overhaul|repair|preventive|predictive)\b",
+    ],
+    "Standards": [
+        r"\b(iso|iec|api|ansi|astm|osha|nfpa|ieee)\b",
+    ],
+    "Technologies": [
+        r"\b(iot|ai|ml|predictive maintenance|condition monitoring|digital twin|scada|plc|robotics|automation)\b",
+    ],
+    "SOPs": [
+        r"\b(sop|standard operating procedure|procedure|work instruction)\b",
+    ],
+}
+
+_COMPILED_ENTITY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (entity_type, re.compile(pattern, re.IGNORECASE))
+    for entity_type, patterns in _ENTITY_PATTERNS.items()
+    for pattern in patterns
+]
+
+
+class RAGEntity(TypedDict):
+    """An industrial entity extracted from retrieved context."""
+
+    label: str
+    type: str
+
 
 class RAGSource(TypedDict):
     """Source metadata included in the final RAG response."""
 
     chunk_id: str
+    text: str
     page_start: int | None
     page_end: int | None
     score: float | None
@@ -26,7 +63,9 @@ class RAGResponse(TypedDict):
     answer: str
     retrieval: dict[str, Any]
     model: str
+    context_chunks: int
     sources: list[RAGSource]
+    entities: list[RAGEntity]
     success: bool
 
 
@@ -65,7 +104,7 @@ class RAGPipeline:
         self.retrieval_service = retrieval_service
         self.llm_service = llm_service
 
-    def ask(self, question: str, top_k: int = 5) -> RAGResponse:
+    def ask(self, question: str, top_k: int = 5, document_ids: list[str] | None = None) -> RAGResponse:
         """Answer a user question using retrieved document context.
 
         Args:
@@ -93,6 +132,7 @@ class RAGPipeline:
             retrieval = self.retrieval_service.retrieve(
                 question=clean_question,
                 top_k=clean_top_k,
+                document_ids=document_ids,
             )
             logger.info(
                 "RAG retrieval completed: top_k=%s results=%s latency_ms=%s",
@@ -134,6 +174,7 @@ class RAGPipeline:
             "model": str(llm_response["model"]),
             "context_chunks": len(retrieved_chunks),
             "sources": self._build_sources(retrieved_chunks),
+            "entities": self._extract_entities(retrieved_chunks),
             "success": True,
         }
 
@@ -174,9 +215,11 @@ class RAGPipeline:
 
         sources: list[RAGSource] = []
         for chunk in retrieved_chunks:
+            raw_text = str(chunk.get("text", "")).strip()
             sources.append(
                 {
                     "chunk_id": str(chunk.get("chunk_id", "")),
+                    "text": raw_text[:500] if raw_text else "",
                     "page_start": RAGPipeline._optional_int(chunk.get("page_start")),
                     "page_end": RAGPipeline._optional_int(chunk.get("page_end")),
                     "score": RAGPipeline._optional_float(chunk.get("score")),
@@ -185,6 +228,26 @@ class RAGPipeline:
             )
 
         return sources
+
+    @staticmethod
+    def _extract_entities(retrieved_chunks: list[dict[str, Any]]) -> list[RAGEntity]:
+        """Extract unique industrial entities from retrieved chunk text."""
+
+        seen: set[str] = set()
+        entities: list[RAGEntity] = []
+        combined_text = " ".join(
+            str(chunk.get("text", "")) for chunk in retrieved_chunks
+        )
+
+        for entity_type, pattern in _COMPILED_ENTITY_PATTERNS:
+            for match in pattern.finditer(combined_text):
+                label = match.group(1).strip().title()
+                key = f"{entity_type}:{label}"
+                if key not in seen:
+                    seen.add(key)
+                    entities.append({"label": label, "type": entity_type})
+
+        return entities[:20]
 
     @staticmethod
     def _optional_int(value: Any) -> int | None:

@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  BookOpen,
   CheckCircle2,
   Cog,
   Cpu,

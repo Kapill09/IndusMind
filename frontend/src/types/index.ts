@@ -18,6 +18,7 @@ export interface UploadResponse {
 
 export interface RagSource {
   chunk_id: string;
+  text?: string;
   page_start: number | null;
   page_end: number | null;
   score: number | null;
@@ -41,6 +42,8 @@ export interface AskResponse {
   retrieval_time_ms: number;
   total_results: number;
   sources: RagSource[];
+  entities?: Array<{ label: string; type: string }>;
+  context_chunks?: number;
 }
 
 export interface ChatMessage {
@@ -52,6 +55,8 @@ export interface ChatMessage {
   confidence?: number;
   latencyMs?: number;
   model?: string;
+  entities?: Array<{ label: string; type: string }>;
+  contextChunks?: number;
 }
 
 export interface KnowledgeDocument {

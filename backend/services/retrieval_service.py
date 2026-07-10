@@ -119,6 +119,7 @@ class RetrievalService:
         self,
         question: str,
         top_k: int = 5,
+        document_ids: list[str] | None = None,
     ) -> RetrievalResponse:
         """Retrieve the top K chunks using hybrid semantic and lexical ranking."""
 
@@ -136,7 +137,11 @@ class RetrievalService:
             )
 
         try:
-            all_chunks = self.vectordb_service.get_chunks(limit=MAX_KEYWORD_SCAN_CHUNKS)
+            where = None
+            if document_ids:
+                # Chroma metadata filtering: match document_id in provided list
+                where = {"document_id": {"$in": document_ids}}
+            all_chunks = self.vectordb_service.get_chunks(limit=MAX_KEYWORD_SCAN_CHUNKS, where=where)
         except VectorDBServiceError as exc:
             raise RetrievalSearchError("Failed to read chunks for hybrid retrieval.") from exc
 
@@ -156,6 +161,9 @@ class RetrievalService:
             question_embedding=question_embedding,
             top_k=semantic_limit,
             structured_scores=structured_scores,
+            # pass document restriction through semantic search
+            document_ids=document_ids,
+            
         )
 
         logger.info(
@@ -202,6 +210,7 @@ class RetrievalService:
         question_embedding: list[float],
         top_k: int,
         structured_scores: dict[str, float],
+        document_ids: list[str] | None = None,
     ) -> list[VectorSearchResult]:
         """Run semantic search, narrowed by structured candidates when possible."""
 
@@ -210,20 +219,27 @@ class RetrievalService:
 
         if structured_filter:
             try:
+                where_for_search = structured_filter
+                if document_ids:
+                    where_for_search = {"$and": [structured_filter, {"document_id": {"$in": document_ids}}]}
                 semantic_results.extend(
                     self.vectordb_service.search(
                         query_embedding=question_embedding,
                         top_k=min(top_k, len(structured_scores)),
-                        where=structured_filter,
+                        where=where_for_search,
                     )
                 )
             except VectorDBServiceError:
                 logger.warning("Filtered semantic search failed; falling back to global search.", exc_info=True)
 
         try:
+            where_for_search = None
+            if document_ids:
+                where_for_search = {"document_id": {"$in": document_ids}}
             global_results = self.vectordb_service.search(
                 query_embedding=question_embedding,
                 top_k=top_k,
+                where=where_for_search,
             )
         except VectorDBServiceError as exc:
             raise RetrievalSearchError("Failed to retrieve semantic candidates.") from exc

@@ -1,4 +1,4 @@
-import { BarChart3, Database, FileStack, Gauge, Layers3, Timer } from "lucide-react";
+import { BarChart3, Database, FileStack, Gauge, Timer } from "lucide-react";
 import { ResponsiveContainer, BarChart as RechartsBarChart, CartesianGrid, Cell, Line, LineChart, Tooltip, XAxis, YAxis, Bar } from "recharts";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

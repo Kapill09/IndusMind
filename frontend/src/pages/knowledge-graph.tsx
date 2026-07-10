@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ReactFlowProvider, useReactFlow, type Node } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useKnowledgeGraph, type KGNodeData } from "@/hooks/use-knowledge-graph";
+import { DocumentSelector } from "@/components/documents/document-selector";
+import { useSelectedDocuments } from "@/hooks/use-selected-documents";
 import { useGraphInteractions } from "@/hooks/use-graph-interactions";
 import { GraphCanvas } from "@/components/knowledge-graph/graph-canvas";
 import { GraphToolbar } from "@/components/knowledge-graph/graph-toolbar";
@@ -20,10 +22,6 @@ interface KnowledgeGraphPageProps {
 }
 
 export function KnowledgeGraphPage({ onNavigate }: KnowledgeGraphPageProps) {
-  useEffect(() => {
-    console.log("[KnowledgeGraphPage] Component mounted");
-  }, []);
-
   return (
     <ReactFlowProvider>
       <KnowledgeGraphContent onNavigate={onNavigate} />
@@ -33,6 +31,7 @@ export function KnowledgeGraphPage({ onNavigate }: KnowledgeGraphPageProps) {
 
 function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { selected: selectedDocumentIds } = useSelectedDocuments();
   const {
     nodes,
     edges,
@@ -43,7 +42,7 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
     error,
     refetch,
     minimapColor,
-  } = useKnowledgeGraph();
+  } = useKnowledgeGraph("summary", selectedDocumentIds);
 
   const {
     selectedNode,
@@ -59,7 +58,6 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
     onNodeClick,
     onPaneClick,
     highlightRelated,
-    setSelectedNodeId,
   } = useGraphInteractions({ allNodes: nodes, allEdges: edges, rawEdges });
 
   const { fitView } = useReactFlow();
@@ -70,19 +68,6 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
     y: number;
     node: Node<KGNodeData>;
   } | null>(null);
-
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent, node: Node) => {
-      event.preventDefault();
-      setContextMenu({
-        x: event.clientX,
-        y: event.clientY,
-        node: node as Node<KGNodeData>,
-      });
-      setSelectedNodeId(node.id);
-    },
-    [setSelectedNodeId]
-  );
 
   const handleCenterNode = useCallback(() => {
     if (contextMenu) {
@@ -101,7 +86,6 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
   }, [contextMenu]);
 
   // ── Loading ────────────────────────────────────────────────────
-  console.log("[KnowledgeGraphContent] Render - isLoading:", isLoading, "isError:", isError, "nodes length:", nodes.length);
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -161,9 +145,6 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
         {/* Center canvas */}
         <div
           className="relative flex-1 h-full"
-          onContextMenu={(e) => {
-            // Only handle context menu on nodes (handled via node's onContextMenu)
-          }}
         >
           <GraphToolbar
             onRefresh={() => refetch()}
@@ -188,7 +169,7 @@ function KnowledgeGraphContent({ onNavigate }: KnowledgeGraphPageProps) {
             node={selectedNode}
             connectedNodes={connectedNodes}
             connectedEdges={connectedEdges}
-            onClose={() => setSelectedNodeId(null)}
+            onClose={onPaneClick}
             onHighlightRelated={highlightRelated}
             onNavigate={onNavigate}
           />
@@ -233,6 +214,10 @@ function PageHeader() {
           Explore relationships between industrial documents, engineering
           concepts, equipment and AI-extracted knowledge.
         </p>
+      </div>
+      <div className="flex items-center gap-3">
+        {/* Document selector for controlling which sources are visible/used */}
+        <DocumentSelector compact />
       </div>
     </motion.section>
   );

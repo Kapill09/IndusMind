@@ -9,6 +9,8 @@ export type KGDisplayMode = "summary" | "full";
 
 const SUMMARY_NODE_LIMIT = 25;
 const SUMMARY_EDGE_LIMIT = 35;
+const EMPTY_KG_NODES: KGNode[] = [];
+const EMPTY_KG_EDGES: KGEdge[] = [];
 const DETAIL_NODE_TYPES = new Set(["Page", "Chunk"]);
 const MAIN_TYPE_QUOTAS: Record<string, number> = {
   Document: 3,
@@ -142,18 +144,16 @@ function summarizeGraph(rawNodes: KGNode[], rawEdges: KGEdge[]) {
   return { nodes: selectedNodes, edges: selectedEdges };
 }
 
-export function useKnowledgeGraph(displayMode: KGDisplayMode = "summary") {
-  console.log("[useKnowledgeGraph] Hook executed, setting up useQuery...");
-
+export function useKnowledgeGraph(displayMode: KGDisplayMode = "summary", documentIds?: string[] | null) {
   const query = useQuery({
-    queryKey: ["knowledge-graph"],
-    queryFn: fetchKnowledgeGraph,
+    queryKey: ["knowledge-graph", { documentIds }],
+    queryFn: () => fetchKnowledgeGraph(documentIds ?? null),
     staleTime: 60_000,
     retry: 2,
   });
 
-  const rawNodes = query.data?.nodes ?? [];
-  const rawEdges = query.data?.edges ?? [];
+  const rawNodes = query.data?.nodes ?? EMPTY_KG_NODES;
+  const rawEdges = query.data?.edges ?? EMPTY_KG_EDGES;
   const graphData = useMemo(() => {
     if (displayMode === "full") {
       return { nodes: rawNodes, edges: rawEdges };
@@ -165,21 +165,9 @@ export function useKnowledgeGraph(displayMode: KGDisplayMode = "summary") {
   const displayNodes = graphData.nodes;
   const displayEdges = graphData.edges;
 
-  console.log("[useKnowledgeGraph] React Query state:", {
-    status: query.status,
-    fetchStatus: query.fetchStatus,
-    isLoading: query.isLoading,
-    isFetching: query.isFetching,
-    isError: query.isError,
-  });
-  console.log("[useKnowledgeGraph] Received JSON:", query.data);
-
   const flowNodes = useMemo(() => {
-    const nodes = layoutNodes(displayNodes);
-    console.log("[useKnowledgeGraph] Fetched raw nodes:", rawNodes.length, rawNodes[0]);
-    console.log("[useKnowledgeGraph] Transformed nodes for React Flow:", nodes.length, nodes[0]);
-    return nodes;
-  }, [displayNodes, rawNodes]);
+    return layoutNodes(displayNodes);
+  }, [displayNodes]);
 
   const flowEdges: Edge[] = useMemo(() => {
     const nodeIds = new Set(displayNodes.map((n) => n.id));
@@ -195,10 +183,8 @@ export function useKnowledgeGraph(displayMode: KGDisplayMode = "summary") {
         markerEnd: { type: MarkerType.ArrowClosed },
         data: { weight: e.weight, relationship: e.relationship },
       }));
-    console.log("[useKnowledgeGraph] Fetched raw edges:", rawEdges.length, rawEdges[0]);
-    console.log("[useKnowledgeGraph] Transformed edges for React Flow:", edges.length, edges[0]);
     return edges;
-  }, [displayNodes, displayEdges, rawEdges]);
+  }, [displayNodes, displayEdges]);
 
   const stats = useMemo(
     () => computeStats(displayNodes, displayEdges.length),

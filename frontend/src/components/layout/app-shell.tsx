@@ -11,6 +11,7 @@ import {
   Sun,
   UploadCloud,
   X,
+  Briefcase,
 } from "lucide-react";
 import type React from "react";
 import { cn } from "@/lib/utils";
@@ -55,21 +56,22 @@ export function AppShell({
     <div className="min-h-screen bg-background">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-card/95 shadow-[0_20px_60px_-24px_rgba(15,23,42,0.28)] backdrop-blur transition-transform lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          "group/sidebar fixed inset-y-0 left-0 z-40 flex flex-col border-r border-border bg-card/95 shadow-[0_20px_60px_-24px_rgba(15,23,42,0.28)] backdrop-blur transition-all duration-300 overflow-hidden",
+          "w-72 lg:w-20 lg:hover:w-72",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
         aria-label="Primary navigation"
       >
-        <div className="flex h-16 items-center justify-between border-b border-border px-5">
+        <div className="flex h-16 items-center justify-between border-b border-border px-5 lg:px-0 lg:group-hover/sidebar:px-5 transition-all">
           <button
-            className="flex items-center gap-3 text-left"
+            className="flex items-center gap-3 text-left lg:w-full lg:justify-center lg:group-hover/sidebar:justify-start lg:px-5"
             onClick={() => onNavigate("dashboard")}
             aria-label="Go to dashboard"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
               IM
             </div>
-            <div>
+            <div className="whitespace-nowrap transition-opacity duration-300 lg:w-0 lg:opacity-0 lg:group-hover/sidebar:w-auto lg:group-hover/sidebar:opacity-100">
               <p className="text-sm font-semibold">INDUS MIND</p>
               <p className="text-xs text-muted-foreground">Industrial RAG</p>
             </div>
@@ -77,7 +79,7 @@ export function AppShell({
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden shrink-0"
             onClick={() => setSidebarOpen(false)}
             aria-label="Close navigation"
           >
@@ -85,7 +87,7 @@ export function AppShell({
           </Button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1 px-3 py-4 lg:px-2 lg:group-hover/sidebar:px-3 transition-all">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.key;
@@ -97,13 +99,14 @@ export function AppShell({
                   setSidebarOpen(false);
                 }}
                 className={cn(
-                  "group relative flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-200",
+                  "group relative flex h-11 w-full items-center gap-3 rounded-xl px-3 lg:px-0 lg:justify-center lg:group-hover/sidebar:px-3 lg:group-hover/sidebar:justify-start text-sm font-medium transition-all duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:-translate-y-0.5 hover:bg-muted hover:text-foreground",
                 )}
                 aria-current={isActive ? "page" : undefined}
+                title={item.label}
               >
                 <span
                   className={cn(
@@ -111,17 +114,25 @@ export function AppShell({
                     isActive ? "opacity-100" : "opacity-0",
                   )}
                 />
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                {item.label}
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="whitespace-nowrap transition-opacity duration-200 lg:w-0 lg:opacity-0 lg:group-hover/sidebar:w-auto lg:group-hover/sidebar:opacity-100">
+                  {item.label}
+                </span>
               </button>
             );
           })}
         </nav>
 
-        <div className="border-t border-border p-4">
-          <div className="rounded-2xl border border-border bg-muted/60 p-4">
+        <div className="border-t border-border p-4 lg:p-2 lg:group-hover/sidebar:p-4 transition-all">
+          {/* Mini state for desktop when collapsed */}
+          <div className="hidden lg:flex lg:group-hover/sidebar:hidden h-12 w-full items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
+            <Briefcase className="h-4 w-4" />
+          </div>
+
+          {/* Full state for mobile or expanded desktop */}
+          <div className="rounded-2xl border border-border bg-muted/60 p-4 lg:hidden lg:group-hover/sidebar:block whitespace-nowrap">
             <p className="text-sm font-semibold">Current workspace</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">ET AI Hackathon · Industrial Knowledge Intelligence</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground truncate">ET AI Hackathon · Industrial Knowledge Intelligence</p>
           </div>
         </div>
       </aside>
@@ -134,7 +145,7 @@ export function AppShell({
         />
       ) : null}
 
-      <div className="lg:pl-72">
+      <div className="transition-all duration-300 lg:pl-20">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 md:px-6">
           <Button
             variant="ghost"

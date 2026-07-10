@@ -56,6 +56,7 @@ function IndusMindApp() {
             messages={messages}
             setMessages={setMessages}
             onQuestionAnswered={() => setQuestionsAsked((count) => count + 1)}
+            onNavigate={setActivePage}
           />
         );
       case "upload":

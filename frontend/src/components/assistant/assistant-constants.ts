@@ -7,6 +7,17 @@ export const QUICK_ACTIONS = [
   "Compare with another document",
 ] as const;
 
+export const SUGGESTION_CHIPS = [
+  "Explain Further",
+  "Summarize",
+  "Compare",
+  "Show SOP",
+  "Maintenance Procedure",
+  "Find Standards",
+  "Find Related Equipment",
+  "Generate Checklist",
+] as const;
+
 export const EMPTY_PROMPTS = [
   "What is the lubrication interval for Pump-2?",
   "Explain Lockout Tagout.",

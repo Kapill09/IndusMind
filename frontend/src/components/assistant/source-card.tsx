@@ -1,10 +1,10 @@
-import { memo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Copy, FileText, ScanText, Sparkles } from "lucide-react";
+import { memo, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowUpRight, FileText, ScanText, Sparkles, Target } from "lucide-react";
+import type { MouseEvent } from "react";
 import type { RagSource } from "@/types";
 import { Progress } from "@/components/ui/progress";
-import { getPageLabel, getSourcePreviewText } from "@/lib/assistant-utils";
-import { buildCitationText } from "@/lib/assistant-utils";
+import { buildCitationText, getPageLabel, getSourcePreviewText, getSourceFilename, getSourceTitle } from "@/lib/assistant-utils";
 
 interface SourceCardProps {
   source: RagSource;
@@ -12,87 +12,115 @@ interface SourceCardProps {
 }
 
 export const SourceCard = memo(function SourceCard({ source, onClick }: SourceCardProps) {
-  const [expanded, setExpanded] = useState(false);
-  const filename = String(source.metadata.filename ?? "Uploaded document");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const title = getSourceTitle(source);
+  const filename = getSourceFilename(source);
   const score = Math.max(0, Math.min(100, Math.round((source.score ?? 0.72) * 100)));
   const pageLabel = getPageLabel(source);
-  const heading = source.metadata.heading || source.metadata.title || "Document snippet";
-  const preview = getSourcePreviewText(source);
+  const preview = getSourcePreviewText(source, 140);
   const retrievalMethod = getRetrievalMethod(source);
 
-  const handleClick = () => {
-    setExpanded((value) => !value);
+  const handleCardClick = () => {
+    setIsExpanded((current) => !current);
     onClick(source);
   };
+
+  const handleActionClick = (event: React.MouseEvent<HTMLButtonElement>, action: string) => {
+    event.stopPropagation();
+    if (action === "open") {
+      onClick(source);
+    } else if (action === "pdf") {
+      onClick(source);
+    } else if (action === "highlight") {
+      onClick(source);
+    }
+  };
+
+  const badgeLabel = useMemo(() => {
+    if (retrievalMethod) return retrievalMethod;
+    return score >= 85 ? "Semantic" : score >= 65 ? "Hybrid" : "Mixed";
+  }, [retrievalMethod, score]);
 
   return (
     <motion.button
       type="button"
-      onClick={handleClick}
-      whileHover={{ y: -2, scale: 1.01 }}
+      onClick={handleCardClick}
+      whileHover={{ y: -2, scale: 1.005 }}
       whileTap={{ scale: 0.99 }}
-      className="group w-full cursor-pointer overflow-hidden rounded-2xl border border-border bg-background text-left shadow-sm transition-all hover:border-primary/50 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={`Open source ${filename}, ${pageLabel}`}
+      className="group w-full cursor-pointer overflow-hidden rounded-3xl border border-border bg-background text-left shadow-enterprise transition-all duration-200 hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={`Open source ${title}, ${pageLabel}`}
     >
-      <div className="p-3">
-        <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-            <FileText className="h-4 w-4" aria-hidden="true" />
+      <div className="flex h-full flex-col p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+            <FileText className="h-5 w-5" aria-hidden="true" />
           </div>
 
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h4 className="truncate text-xs font-semibold leading-tight text-foreground" title={filename}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" title={filename}>
                   {filename}
-                </h4>
-                <p className="mt-1 text-[11px] text-muted-foreground">{heading}</p>
+                </p>
+                <h3 className="mt-1 truncate text-sm font-semibold leading-6 text-foreground" title={title}>
+                  {title}
+                </h3>
               </div>
-              <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                {retrievalMethod}
+              <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                {badgeLabel}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-medium text-muted-foreground">{pageLabel}</span>
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <Progress value={score} className="h-1 flex-1 bg-muted group-hover:bg-muted/80" />
-                <span className="text-[10px] font-medium text-muted-foreground">{score}%</span>
-              </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <span>{pageLabel}</span>
+              <span aria-hidden="true">•</span>
+              <span>{score}% relevance</span>
             </div>
           </div>
         </div>
 
-        <div className="mt-3 rounded-xl border border-border/60 bg-card/80 p-2.5">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
-            Preview
+        <div className="mt-4 rounded-[26px] border border-border/70 bg-card/90 p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <ScanText className="h-4 w-4" aria-hidden="true" />
+            Source excerpt
           </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">{preview}</p>
+          <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{preview}</p>
         </div>
 
-        <AnimatePresence initial={false}>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-3 space-y-2 rounded-xl border border-border/70 bg-muted/20 p-2.5 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  Citation
-                </div>
-                <p className="leading-5">{buildCitationText(source)}</p>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  Double-click to inspect the citation details.
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="mt-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+            Citation details
+          </div>
+          <p className="line-clamp-2 text-sm leading-6 text-foreground">{buildCitationText(source)}</p>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2 opacity-0 transition duration-200 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(event) => handleActionClick(event, "open")}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/80 px-3 py-2 text-[11px] font-semibold text-foreground transition hover:border-primary/70 hover:bg-primary/10"
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            Open source
+          </button>
+          <button
+            type="button"
+            onClick={(event) => handleActionClick(event, "pdf")}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/80 px-3 py-2 text-[11px] font-semibold text-foreground transition hover:border-primary/70 hover:bg-primary/10"
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            Open PDF
+          </button>
+          <button
+            type="button"
+            onClick={(event) => handleActionClick(event, "highlight")}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/80 px-3 py-2 text-[11px] font-semibold text-foreground transition hover:border-primary/70 hover:bg-primary/10"
+          >
+            <Target className="h-3.5 w-3.5" aria-hidden="true" />
+            Highlight in KG
+          </button>
+        </div>
       </div>
     </motion.button>
   );

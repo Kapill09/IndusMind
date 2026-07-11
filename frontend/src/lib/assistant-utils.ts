@@ -78,11 +78,11 @@ export function buildStructuredAnswerSections(answer: string, sources?: RagSourc
   const sectionPattern =
   /^(#{1,3})\s*(Summary|Key Findings|Detailed Explanation|Recommendations|Related Concepts|Sources)/gm;
   const safePattern = sectionPattern.global
-  ? sectionPattern
-  : new RegExp(sectionPattern.source, sectionPattern.flags + "g");
+    ? sectionPattern
+    : new RegExp(sectionPattern.source, sectionPattern.flags + "g");
 
-const headings = Array.from(normalizedAnswer.matchAll(safePattern));
-  if (headings.length > 0) {
+  const headingMatches = Array.from(normalizedAnswer.matchAll(safePattern));
+  if (headingMatches.length > 0) {
     const sections = [
       { id: "summary", title: "Summary", content: "" },
       { id: "key-findings", title: "Key Findings", content: "" },
@@ -96,11 +96,11 @@ const headings = Array.from(normalizedAnswer.matchAll(safePattern));
     const bodySections = blocks.slice(1).filter((block) => block.trim());
     const sectionMap = new Map<string, string>();
 
-    headings.forEach((heading, index) => {
-      const key = heading.toLowerCase();
+    headingMatches.forEach((match, index) => {
+      const heading = String(match[0]).toLowerCase();
       const content = bodySections[index]?.trim() ?? "";
       if (content) {
-        sectionMap.set(key, content);
+        sectionMap.set(heading, content);
       }
     });
 
@@ -150,6 +150,18 @@ const headings = Array.from(normalizedAnswer.matchAll(safePattern));
 export function getSourcePreviewText(source: RagSource, maxLength = 110) {
   const text = (source.text ?? source.metadata?.heading ?? source.metadata?.title ?? "Grounded snippet from the uploaded document.").toString();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
+}
+
+export function getSourceTitle(source: RagSource, maxLength = 52) {
+  const rawTitle = source.metadata?.heading || source.metadata?.title || source.metadata?.filename || "Uploaded document";
+  const normalizedTitle = String(rawTitle).replace(/\s+/g, " ").trim();
+  return normalizedTitle.length > maxLength
+    ? `${normalizedTitle.slice(0, maxLength - 1).trimEnd()}…`
+    : normalizedTitle;
+}
+
+export function getSourceFilename(source: RagSource) {
+  return String(source.metadata?.filename ?? "Uploaded document");
 }
 
 export function getPageLabel(source: RagSource) {

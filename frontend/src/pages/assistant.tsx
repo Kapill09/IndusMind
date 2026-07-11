@@ -189,7 +189,7 @@ export function AssistantPage({
 
       {/* Chat area — scrollable center column */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="mx-auto max-w-[820px] px-4 py-6">
+        <div className="mx-auto max-w-[1080px] px-4 py-6">
           {messages.length === 0 ? (
             <EmptyState onPrompt={submitQuestion} disabled={isAsking} />
           ) : (

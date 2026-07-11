@@ -1,6 +1,21 @@
 import type { AskResponse, UploadResponse } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const INVALID_DOCUMENT_ID_PLACEHOLDERS = new Set(["string", "null", "undefined"]);
+
+function sanitizeDocumentIds(documentIds?: string[] | null): string[] | undefined {
+  if (!Array.isArray(documentIds)) {
+    return undefined;
+  }
+
+  const cleanedIds = documentIds
+    .map((documentId) => (typeof documentId === "string" ? documentId.trim() : ""))
+    .filter((documentId) => documentId.length > 0)
+    .filter((documentId) => !INVALID_DOCUMENT_ID_PLACEHOLDERS.has(documentId.toLowerCase()))
+    .filter((documentId, index, values) => values.indexOf(documentId) === index);
+
+  return cleanedIds.length > 0 ? cleanedIds : undefined;
+}
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => null);
@@ -20,7 +35,10 @@ export async function askQuestion(
   documentIds?: string[] | null,
 ): Promise<AskResponse> {
   const body: Record<string, unknown> = { question, top_k: topK };
-  if (documentIds && documentIds.length > 0) body.document_ids = documentIds;
+  const sanitizedDocumentIds = sanitizeDocumentIds(documentIds);
+  if (sanitizedDocumentIds) {
+    body.document_ids = sanitizedDocumentIds;
+  }
 
   let response: Response;
   try {

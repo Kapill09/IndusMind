@@ -3,6 +3,7 @@ import re
 from collections import Counter
 from typing import Any, Iterable, TypedDict
 
+from backend.services.document_id_validation import sanitize_document_ids
 from backend.services.embedding_service import EmbeddingService, EmbeddingServiceError
 from backend.services.query_analyzer import QueryAnalyzer, StructuredQuery
 from backend.services.vectordb_service import (
@@ -125,6 +126,7 @@ class RetrievalService:
 
         clean_question = self._validate_question(question)
         clean_top_k = self._validate_top_k(top_k)
+        clean_document_ids = sanitize_document_ids(document_ids)
         semantic_limit = self._semantic_candidate_limit(clean_top_k)
 
         structured_query = self.query_analyzer.analyze(clean_question)
@@ -138,9 +140,9 @@ class RetrievalService:
 
         try:
             where = None
-            if document_ids:
+            if clean_document_ids:
                 # Chroma metadata filtering: match document_id in provided list
-                where = {"document_id": {"$in": document_ids}}
+                where = {"document_id": {"$in": clean_document_ids}}
             all_chunks = self.vectordb_service.get_chunks(limit=MAX_KEYWORD_SCAN_CHUNKS, where=where)
         except VectorDBServiceError as exc:
             raise RetrievalSearchError("Failed to read chunks for hybrid retrieval.") from exc
@@ -162,7 +164,7 @@ class RetrievalService:
             top_k=semantic_limit,
             structured_scores=structured_scores,
             # pass document restriction through semantic search
-            document_ids=document_ids,
+            document_ids=clean_document_ids,
             
         )
 
@@ -216,12 +218,13 @@ class RetrievalService:
 
         semantic_results: list[VectorSearchResult] = []
         structured_filter = self._chunk_id_filter(structured_scores)
+        clean_document_ids = sanitize_document_ids(document_ids)
 
         if structured_filter:
             try:
                 where_for_search = structured_filter
-                if document_ids:
-                    where_for_search = {"$and": [structured_filter, {"document_id": {"$in": document_ids}}]}
+                if clean_document_ids:
+                    where_for_search = {"$and": [structured_filter, {"document_id": {"$in": clean_document_ids}}]}
                 semantic_results.extend(
                     self.vectordb_service.search(
                         query_embedding=question_embedding,
@@ -234,8 +237,8 @@ class RetrievalService:
 
         try:
             where_for_search = None
-            if document_ids:
-                where_for_search = {"document_id": {"$in": document_ids}}
+            if clean_document_ids:
+                where_for_search = {"document_id": {"$in": clean_document_ids}}
             global_results = self.vectordb_service.search(
                 query_embedding=question_embedding,
                 top_k=top_k,

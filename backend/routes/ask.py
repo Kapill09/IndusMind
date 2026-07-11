@@ -2,7 +2,7 @@ import logging
 from time import perf_counter
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.pipeline.rag_pipeline import (
     RAGPipeline,
@@ -11,6 +11,7 @@ from backend.pipeline.rag_pipeline import (
     RAGPipelineValidationError,
 )
 
+from backend.services.document_id_validation import sanitize_document_ids
 from backend.services.llm_service import LLMService
 from backend.services.embedding_service import EmbeddingService
 from backend.services.retrieval_service import RetrievalService
@@ -34,6 +35,22 @@ logger = logging.getLogger(__name__)
 
 class AskRequest(BaseModel):
     """Request body for semantic retrieval over the INDUS MIND knowledge base."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "question": "What is Problem Statement 8?",
+                    "top_k": 5,
+                },
+                {
+                    "question": "Explain the maintenance procedure.",
+                    "top_k": 5,
+                    "document_ids": ["maintenance_manual_2024"],
+                },
+            ]
+        }
+    )
 
     question: str = Field(
         ...,
@@ -132,17 +149,19 @@ async def ask_question(request: AskRequest):
         vdb = pipeline.retrieval_service.vectordb_service
         emb = pipeline.retrieval_service.embedding_service
         
+        sanitized_document_ids = sanitize_document_ids(request.document_ids)
         print(f"collection name: {vdb.collection_name}")
         print(f"collection count: {vdb.count_documents()}")
         print(f"question: {request.question}")
         print(f"document_ids in request: {request.document_ids}")
+        print(f"sanitized_document_ids: {sanitized_document_ids}")
         q_emb = emb.generate_embedding(request.question)
         print(f"query embedding dimension: {len(q_emb)}")
         
         response = pipeline.ask(
                 question=request.question,
                 top_k=request.top_k,
-                document_ids=request.document_ids,
+                document_ids=sanitized_document_ids,
             )
         
         chunks = response["retrieval"]["results"]

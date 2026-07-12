@@ -15,6 +15,7 @@ from backend.services.document_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+api_documents_router = APIRouter(prefix="/api/documents", tags=["documents"])
 document_service = DocumentService()
 RAW_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
@@ -63,6 +64,30 @@ def preview_document_pdf(document_id: str | None = None, filename: str | None = 
 
     resolved_filename = (filename or (document or {}).get("filename") or "").strip()
     pdf_path = _resolve_pdf_path(resolved_filename, resolved_document_id)
+    if not pdf_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file was not found for this document.")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=pdf_path.name,
+    )
+
+
+@api_documents_router.get("/{document_id}/pdf", status_code=status.HTTP_200_OK)
+def stream_document_pdf(document_id: str) -> FileResponse:
+    """Stream an uploaded PDF by document id for source inspection in the frontend."""
+
+    try:
+        document = document_service.get_document(document_id)
+    except (DocumentServiceValidationError, DocumentServiceNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentServiceError as exc:
+        logger.exception("Failed to resolve document for PDF streaming: %s", document_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    resolved_filename = str((document or {}).get("filename") or "").strip()
+    pdf_path = _resolve_pdf_path(resolved_filename, document_id)
     if not pdf_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file was not found for this document.")
 

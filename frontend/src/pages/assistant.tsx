@@ -30,6 +30,8 @@ export function AssistantPage({
   const conversationEndRef = useRef<HTMLDivElement | null>(null);
   const [drawerSources, setDrawerSources] = useState<RagSource[] | null>(null);
   const [activePdfSource, setActivePdfSource] = useState<RagSource | null>(null);
+  const [activePdfSources, setActivePdfSources] = useState<RagSource[]>([]);
+  const [activePdfConfidence, setActivePdfConfidence] = useState<number | undefined>();
   const { selected: selectedDocumentIds } = useSelectedDocuments();
 
   // ── Mutation ──
@@ -168,12 +170,19 @@ export function AssistantPage({
     setDrawerSources(null);
   }, []);
 
-  const handleSourceClick = useCallback((source: RagSource) => {
-    setActivePdfSource(source);
-  }, []);
+  const handleSourceClick = useCallback(
+    (source: RagSource, contextSources?: RagSource[], confidenceScore?: number) => {
+      setActivePdfSource(source);
+      setActivePdfSources(contextSources ?? [source]);
+      setActivePdfConfidence(confidenceScore);
+    },
+    [],
+  );
 
   const handleClosePdfViewer = useCallback(() => {
     setActivePdfSource(null);
+    setActivePdfSources([]);
+    setActivePdfConfidence(undefined);
   }, []);
 
   const handleOpenKnowledgeGraph = useCallback(() => {
@@ -211,7 +220,7 @@ export function AssistantPage({
                   <AssistantMessage
                     key={message.id}
                     message={message}
-                    onSourceClick={() => {}}
+                    onSourceClick={handleSourceClick}
                     onViewSources={handleViewSources}
                     onSuggest={submitQuestion}
                     onRegenerate={handleRegenerate}
@@ -255,7 +264,10 @@ export function AssistantPage({
       />
       <SourcePdfViewerDrawer
         source={activePdfSource}
+        sources={activePdfSources}
+        confidenceScore={activePdfConfidence}
         onClose={handleClosePdfViewer}
+        onOpenKnowledgeGraph={handleOpenKnowledgeGraph}
       />
     </div>
   );

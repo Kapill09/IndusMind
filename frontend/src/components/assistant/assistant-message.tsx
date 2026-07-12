@@ -25,7 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AssistantMessageProps {
   message: ChatMessage;
-  onSourceClick: (source: RagSource) => void;
+  onSourceClick: (source: RagSource, contextSources?: RagSource[], confidenceScore?: number) => void;
   onViewSources: (sources: RagSource[]) => void;
   onSuggest: (suggestion: string) => void;
   onRegenerate: () => void;
@@ -227,7 +227,7 @@ export const AssistantMessage = memo(function AssistantMessage({
                 <button
                   key={source.chunk_id}
                   type="button"
-                  onClick={() => onSourceClick(source)}
+                  onClick={() => onSourceClick(source, message.sources ?? [], message.confidence)}
                   className="min-w-0 rounded-2xl border border-border/70 bg-background/80 p-4 text-left transition hover:border-primary/60 hover:bg-muted/40"
                 >
                   <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground break-words" title={source.metadata?.filename ?? "Uploaded document"}>

@@ -11,6 +11,7 @@ import { ChatInput } from "@/components/assistant/chat-input";
 import { UserMessage } from "@/components/assistant/user-message";
 import { AssistantMessage } from "@/components/assistant/assistant-message";
 import { SourcesPanelDrawer } from "@/components/assistant/sources-panel-drawer";
+import { SourcePdfViewerDrawer } from "@/components/assistant/source-pdf-viewer-drawer";
 
 interface AssistantPageProps {
   messages: ChatMessage[];
@@ -28,6 +29,7 @@ export function AssistantPage({
   const { notify } = useToast();
   const conversationEndRef = useRef<HTMLDivElement | null>(null);
   const [drawerSources, setDrawerSources] = useState<RagSource[] | null>(null);
+  const [activePdfSource, setActivePdfSource] = useState<RagSource | null>(null);
   const { selected: selectedDocumentIds } = useSelectedDocuments();
 
   // ── Mutation ──
@@ -166,6 +168,14 @@ export function AssistantPage({
     setDrawerSources(null);
   }, []);
 
+  const handleSourceClick = useCallback((source: RagSource) => {
+    setActivePdfSource(source);
+  }, []);
+
+  const handleClosePdfViewer = useCallback(() => {
+    setActivePdfSource(null);
+  }, []);
+
   const handleOpenKnowledgeGraph = useCallback(() => {
     onNavigate("knowledge-graph");
   }, [onNavigate]);
@@ -242,6 +252,10 @@ export function AssistantPage({
       <SourcesPanelDrawer
         sources={drawerSources}
         onClose={handleCloseDrawer}
+      />
+      <SourcePdfViewerDrawer
+        source={activePdfSource}
+        onClose={handleClosePdfViewer}
       />
     </div>
   );

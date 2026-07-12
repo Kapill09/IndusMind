@@ -37,6 +37,7 @@ interface AssistantMessageProps {
 
 export const AssistantMessage = memo(function AssistantMessage({
   message,
+  onSourceClick,
   onViewSources,
   onSuggest,
   onRegenerate,
@@ -221,18 +222,29 @@ export const AssistantMessage = memo(function AssistantMessage({
         {hasSources && (
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-foreground">Enterprise Citations</h4>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {message.sources!.slice(0, 4).map((source) => (
-                <div key={source.chunk_id} className="rounded-2xl border border-border/70 bg-background/80 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{source.metadata?.filename ?? "Uploaded document"}</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">{source.metadata?.heading || source.metadata?.title || "Source citation"}</p>
-                  <p className="mt-2 text-[11px] text-muted-foreground">{source.text ? source.text.slice(0, 100) + (source.text.length > 100 ? "…" : "") : "Context preview unavailable."}</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <button
+                  key={source.chunk_id}
+                  type="button"
+                  onClick={() => onSourceClick(source)}
+                  className="min-w-0 rounded-2xl border border-border/70 bg-background/80 p-4 text-left transition hover:border-primary/60 hover:bg-muted/40"
+                >
+                  <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground break-words" title={source.metadata?.filename ?? "Uploaded document"}>
+                    {source.metadata?.filename ?? "Uploaded document"}
+                  </p>
+                  <p className="mt-2 truncate text-sm font-semibold text-foreground break-words" title={source.metadata?.heading || source.metadata?.title || "Source citation"}>
+                    {source.metadata?.heading || source.metadata?.title || "Source citation"}
+                  </p>
+                  <p className="mt-3 line-clamp-3 text-[11px] leading-5 text-muted-foreground">
+                    {source.text ? source.text.slice(0, 140) + (source.text.length > 140 ? "…" : "") : "Context preview unavailable."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                     <span>{source.page_start ? `Page ${source.page_start}` : "Page unknown"}</span>
-                    <span>•</span>
+                    <span aria-hidden="true">•</span>
                     <span>{Math.round((source.score ?? 0.72) * 100)}%</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

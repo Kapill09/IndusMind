@@ -178,4 +178,4 @@ export function buildCitationText(source: RagSource) {
   const pageLabel = getPageLabel(source);
   const title = source.metadata?.heading || source.metadata?.title || filename;
   return `${title} (${filename}, ${pageLabel})`;
-}
+}3

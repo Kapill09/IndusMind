@@ -44,6 +44,7 @@ export interface AskResponse {
   sources: RagSource[];
   entities?: Array<{ label: string; type: string }>;
   context_chunks?: number;
+  retrieval_scope?: string;
 }
 
 export interface ChatMessage {
@@ -57,9 +58,13 @@ export interface ChatMessage {
   model?: string;
   entities?: Array<{ label: string; type: string }>;
   contextChunks?: number;
+  retrievalScope?: string;
 }
 
 export interface KnowledgeDocument {
+  /** Canonical document identifier from ChromaDB metadata. */
+  document_id: string;
+  /** Alias kept for backward compatibility — set equal to document_id. */
   id: string;
   filename: string;
   pages: number;

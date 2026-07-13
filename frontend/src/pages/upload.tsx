@@ -3,17 +3,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, FileUp, Layers3, Loader2, UploadCloud, XCircle } from "lucide-react";
 import { uploadDocument } from "@/lib/api";
+import { DOCUMENTS_QUERY_KEY } from "@/hooks/use-local-documents";
 import { cn, fileSizeLabel, formatNumber } from "@/lib/utils";
-import type { UploadResponse } from "@/types";
 import { useToast } from "@/components/feedback/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-
-interface UploadPageProps {
-  onUploaded: (response: UploadResponse) => void;
-}
 
 const pipelineSteps = [
   "Uploading",
@@ -25,7 +21,7 @@ const pipelineSteps = [
   "Completed",
 ];
 
-export function UploadPage({ onUploaded }: UploadPageProps) {
+export function UploadPage() {
   const { notify } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [progress, setProgress] = useState(0);
@@ -44,8 +40,9 @@ export function UploadPage({ onUploaded }: UploadPageProps) {
     onSuccess: (response) => {
       setProgress(100);
       setPipelineStage(pipelineSteps.length - 1);
-      onUploaded(response);
-      // Ensure the knowledge graph and related caches refresh after ingestion
+      // Refresh the shared document list and knowledge graph caches so all
+      // consumers (Sources popup, Documents page, Dashboard) see the new doc.
+      queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["knowledge-graph"] });
       notify({
         tone: "success",

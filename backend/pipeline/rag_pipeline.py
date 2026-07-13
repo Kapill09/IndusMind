@@ -66,6 +66,7 @@ class RAGResponse(TypedDict):
     context_chunks: int
     sources: list[RAGSource]
     entities: list[RAGEntity]
+    retrieval_scope: str
     success: bool
 
 
@@ -167,6 +168,9 @@ class RAGPipeline:
             int((perf_counter() - started_at) * 1000),
         )
 
+        # Build retrieval scope description
+        retrieval_scope = self._build_retrieval_scope(document_ids, retrieved_chunks)
+
         return {
             "question": retrieval["question"],
             "answer": str(llm_response["answer"]),
@@ -175,6 +179,7 @@ class RAGPipeline:
             "context_chunks": len(retrieved_chunks),
             "sources": self._build_sources(retrieved_chunks),
             "entities": self._extract_entities(retrieved_chunks),
+            "retrieval_scope": retrieval_scope,
             "success": True,
         }
 
@@ -228,6 +233,31 @@ class RAGPipeline:
             )
 
         return sources
+
+    @staticmethod
+    def _build_retrieval_scope(
+        document_ids: list[str] | None,
+        retrieved_chunks: list[dict[str, Any]],
+    ) -> str:
+        """Build a human-readable description of the retrieval scope."""
+        
+        if not document_ids:
+            return "Entire Knowledge Base"
+        
+        if len(document_ids) == 1:
+            # Try to get filename from retrieved chunks
+            for chunk in retrieved_chunks:
+                metadata = chunk.get("metadata", {})
+                if metadata.get("document_id") == document_ids[0]:
+                    filename = metadata.get("filename", "")
+                    if filename:
+                        # Get just the filename without path
+                        return filename.split("/")[-1]
+            # Fallback to document_id if no filename found
+            return f"{document_ids[0]}.pdf"
+        
+        # Multiple documents selected
+        return f"{len(document_ids)} Selected Documents"
 
     @staticmethod
     def _extract_entities(retrieved_chunks: list[dict[str, Any]]) -> list[RAGEntity]:

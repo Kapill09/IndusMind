@@ -147,6 +147,22 @@ class RetrievalService:
         except VectorDBServiceError as exc:
             raise RetrievalSearchError("Failed to read chunks for hybrid retrieval.") from exc
 
+        if structured_query:
+            structured_candidates = self._structured_candidates(all_chunks, structured_query)
+            if structured_candidates:
+                logger.info(
+                    "Structured retrieval returned %s candidates and is authoritative; skipping hybrid ranking.",
+                    len(structured_candidates),
+                )
+                return {
+                    "question": clean_question,
+                    "results": self._format_structured_results(
+                        structured_candidates,
+                        structured_query,
+                        clean_top_k,
+                    ),
+                }
+
         chunk_by_id = {chunk["chunk_id"]: chunk for chunk in all_chunks}
         structured_scores = self._metadata_scores(all_chunks, structured_query)
         keyword_scores = self._keyword_scores(clean_question, all_chunks, structured_query)
@@ -165,7 +181,6 @@ class RetrievalService:
             structured_scores=structured_scores,
             # pass document restriction through semantic search
             document_ids=clean_document_ids,
-            
         )
 
         logger.info(
@@ -200,6 +215,35 @@ class RetrievalService:
                 for result in ranked_results
             ],
         )
+
+        # ── Scope validation logging ──────────────────────────────────
+        returned_doc_ids = {
+            str((r.get("metadata") or {}).get("document_id", ""))
+            for r in ranked_results
+        } - {""}
+
+        scope_label = (
+            f"Scoped to {clean_document_ids}"
+            if clean_document_ids
+            else "Entire Knowledge Base"
+        )
+        logger.info(
+            "Retrieval scope audit: scope=%s applied_filter=%s returned_document_ids=%s",
+            scope_label,
+            where,
+            sorted(returned_doc_ids),
+        )
+
+        if clean_document_ids:
+            allowed = set(clean_document_ids)
+            violations = returned_doc_ids - allowed
+            if violations:
+                logger.warning(
+                    "SCOPE VIOLATION: retrieval returned chunks from documents "
+                    "outside the requested scope. allowed=%s violations=%s",
+                    sorted(allowed),
+                    sorted(violations),
+                )
 
         return {
             "question": clean_question,
@@ -268,6 +312,73 @@ class RetrievalService:
 
         logger.info("Structured metadata results: %s", self._score_log(scores))
         return scores
+
+    def _structured_candidates(
+        self,
+        chunks: list[VectorSearchResult],
+        structured_query: StructuredQuery,
+    ) -> list[VectorSearchResult]:
+        """Return chunks that match a structured query exactly or via structured phrase."""
+
+        candidates: list[VectorSearchResult] = []
+        for chunk in chunks:
+            if self._is_structured_match(chunk, structured_query):
+                candidates.append(chunk)
+
+        if not candidates:
+            return []
+
+        return sorted(
+            candidates,
+            key=lambda chunk: self._structured_score(chunk, structured_query),
+            reverse=True,
+        )
+
+    def _is_structured_match(
+        self,
+        chunk: VectorSearchResult,
+        structured_query: StructuredQuery,
+    ) -> bool:
+        metadata = dict(chunk.get("metadata") or {})
+        identifier = RetrievalService._normalize_identifier(structured_query.identifier)
+
+        if structured_query.query_type == "page":
+            page_number = RetrievalService._metadata_int(structured_query.identifier)
+            page_start = RetrievalService._metadata_int(metadata.get("page_start"))
+            page_end = RetrievalService._metadata_int(metadata.get("page_end")) or page_start
+            return page_number is not None and page_start is not None and page_end is not None and page_start <= page_number <= page_end
+
+        metadata_field = STRUCTURED_METADATA_FIELDS.get(structured_query.query_type)
+        if metadata_field:
+            metadata_identifier = RetrievalService._normalize_identifier(metadata.get(metadata_field))
+            if metadata_identifier and metadata_identifier == identifier:
+                return True
+
+        searchable = RetrievalService._normalize_text(RetrievalService._searchable_text(chunk))
+        phrase = RetrievalService._structured_phrase(structured_query)
+        return bool(phrase and phrase in searchable)
+
+    def _format_structured_results(
+        self,
+        results: list[VectorSearchResult],
+        structured_query: StructuredQuery,
+        top_k: int,
+    ) -> list[RetrievalResult]:
+        formatted: list[RetrievalResult] = []
+        for chunk in results[:top_k]:
+            score_components = {
+                "semantic_score": 0.0,
+                "keyword_score": 0.0,
+                "structured_score": self._structured_score(chunk, structured_query),
+            }
+            formatted.append(
+                self._format_result(
+                    chunk,
+                    combined_score=score_components["structured_score"],
+                    score_components=score_components,
+                )
+            )
+        return formatted
 
     def _keyword_scores(
         self,
@@ -342,6 +453,14 @@ class RetrievalService:
         structured_scores = self._normalize_scores(structured_scores)
         weights = self._score_weights(structured_query)
 
+        structured_match_ids = set()
+        if structured_query and structured_scores:
+            structured_match_ids = {
+                chunk_id
+                for chunk_id, score in structured_scores.items()
+                if score >= 0.75
+            }
+
         fused: list[tuple[float, VectorSearchResult, dict[str, float]]] = []
         for chunk_id, result in candidates.items():
             components = {
@@ -355,6 +474,10 @@ class RetrievalService:
                 + weights["structured"] * components["structured_score"]
             )
             combined_score += self._exact_metadata_boost(result, structured_query)
+            if structured_query and chunk_id in structured_match_ids:
+                combined_score += 1.0 + (components["structured_score"] * 0.5)
+            elif structured_query and structured_match_ids:
+                combined_score -= 0.15
             fused.append((combined_score, result, components))
 
         fused.sort(key=lambda item: item[0], reverse=True)

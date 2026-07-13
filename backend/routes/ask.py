@@ -150,13 +150,14 @@ async def ask_question(request: AskRequest):
         emb = pipeline.retrieval_service.embedding_service
         
         sanitized_document_ids = sanitize_document_ids(request.document_ids)
-        print(f"collection name: {vdb.collection_name}")
-        print(f"collection count: {vdb.count_documents()}")
-        print(f"question: {request.question}")
-        print(f"document_ids in request: {request.document_ids}")
-        print(f"sanitized_document_ids: {sanitized_document_ids}")
         q_emb = emb.generate_embedding(request.question)
-        print(f"query embedding dimension: {len(q_emb)}")
+        logger.debug(
+            "Ask request accepted: question=%s document_ids=%s sanitized_document_ids=%s embedding_dim=%s",
+            request.question,
+            request.document_ids,
+            sanitized_document_ids,
+            len(q_emb),
+        )
         
         response = pipeline.ask(
                 question=request.question,
@@ -165,9 +166,7 @@ async def ask_question(request: AskRequest):
             )
         
         chunks = response["retrieval"]["results"]
-        print(f"number of retrieved chunks: {len(chunks)}")
-        if chunks:
-            print(f"retrieved metadata: {chunks[0]['metadata']}")
+        logger.debug("Ask request completed with %s retrieved chunks", len(chunks))
             
     except RAGPipelineValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -202,4 +201,5 @@ async def ask_question(request: AskRequest):
         "sources": response["sources"],
         "entities": response["entities"],
         "context_chunks": response["context_chunks"],
+        "retrieval_scope": response["retrieval_scope"],
     }

@@ -1,4 +1,4 @@
-import type { AskResponse, UploadResponse } from "@/types";
+import type { AskResponse, KnowledgeDocument, UploadResponse } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const INVALID_DOCUMENT_ID_PLACEHOLDERS = new Set(["string", "null", "undefined"]);
@@ -15,6 +15,17 @@ function sanitizeDocumentIds(documentIds?: string[] | null): string[] | undefine
     .filter((documentId, index, values) => values.indexOf(documentId) === index);
 
   return cleanedIds.length > 0 ? cleanedIds : undefined;
+}
+
+function buildAskBody(question: string, topK: number, documentIds?: string[] | null) {
+  const body: Record<string, unknown> = { question, top_k: topK };
+  const sanitizedDocumentIds = sanitizeDocumentIds(documentIds);
+
+  if (sanitizedDocumentIds && sanitizedDocumentIds.length > 0) {
+    body.document_ids = sanitizedDocumentIds;
+  }
+
+  return body;
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -34,11 +45,7 @@ export async function askQuestion(
   topK = 5,
   documentIds?: string[] | null,
 ): Promise<AskResponse> {
-  const body: Record<string, unknown> = { question, top_k: topK };
-  const sanitizedDocumentIds = sanitizeDocumentIds(documentIds);
-  if (sanitizedDocumentIds) {
-    body.document_ids = sanitizedDocumentIds;
-  }
+  const body = buildAskBody(question, topK, documentIds);
 
   let response: Response;
   try {
@@ -89,4 +96,27 @@ export function uploadDocument(
     request.open("POST", `${API_BASE_URL}/upload`);
     request.send(formData);
   });
+}
+
+export async function fetchDocuments(): Promise<KnowledgeDocument[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/documents`);
+  } catch {
+    throw new Error("Unable to reach the documents API. Check that the backend server is running.");
+  }
+
+  const payload = await parseJsonResponse<Record<string, unknown>[]>(response);
+  if (!Array.isArray(payload)) return [];
+
+  return payload.map((doc) => ({
+    document_id: String(doc.document_id ?? ""),
+    id: String(doc.document_id ?? ""),
+    filename: String(doc.filename ?? "unknown.pdf"),
+    pages: Number(doc.pages ?? 0),
+    chunks: Number(doc.chunks ?? 0),
+    vectors: Number(doc.chunks ?? 0),
+    uploadedAt: String(doc.uploaded_at ?? new Date().toISOString()),
+    status: (doc.status as KnowledgeDocument["status"]) ?? "indexed",
+  }));
 }

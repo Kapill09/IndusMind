@@ -41,7 +41,7 @@ function IndusMindApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("indus-mind-theme") === "dark");
-  const { documents, totals, addUploadedDocument } = useLocalDocuments();
+  const { documents, totals } = useLocalDocuments();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -60,7 +60,7 @@ function IndusMindApp() {
           />
         );
       case "upload":
-        return <UploadPage onUploaded={addUploadedDocument} />;
+        return <UploadPage />;
       case "documents":
         return (
           <DocumentsPage
@@ -80,7 +80,7 @@ function IndusMindApp() {
       default:
         return <DashboardPage documents={documents} totals={totals} questionsAsked={questionsAsked} />;
     }
-  }, [activePage, addUploadedDocument, documents, messages, questionsAsked, searchQuery, totals]);
+  }, [activePage, documents, messages, questionsAsked, searchQuery, totals]);
 
   return (
     <AppShell

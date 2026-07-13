@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -93,7 +94,7 @@ class LLMService:
         clean_chunks = self._validate_chunks(retrieved_chunks)
         if not clean_chunks:
             logger.info("LLM generation skipped because no retrieved context was provided.")
-            return self._fallback_response()
+            return self._fallback_response(clean_chunks)
 
         prompt = self._build_prompt(clean_question, clean_chunks)
         started_at = perf_counter()
@@ -112,11 +113,16 @@ class LLMService:
                 ),
             )
         except Exception as exc:
-            raise LLMGenerationError("Gemini failed to generate an answer.") from exc
+            logger.warning(
+                "Gemini generation failed, returning grounded fallback: %s",
+                exc,
+            )
+            return self._build_contextual_fallback(clean_question, clean_chunks)
 
         answer = self._extract_text(response)
         if not answer:
-            raise LLMGenerationError("Gemini returned an empty answer.")
+            logger.warning("Gemini returned an empty answer; using contextual fallback.")
+            return self._build_contextual_fallback(clean_question, clean_chunks)
 
         logger.info(
             "LLM generation completed: model=%s context_chunks=%s latency_ms=%s",
@@ -220,8 +226,11 @@ Answer:
 
         return f"[Context Chunk {index} | chunk_id={chunk_id} | {page_label}]\n{text}"
 
-    def _fallback_response(self) -> dict:
+    def _fallback_response(self, retrieved_chunks: list[dict] | None = None) -> dict:
         """Return the standard grounded fallback without calling the model."""
+
+        if retrieved_chunks:
+            return self._build_contextual_fallback("", retrieved_chunks)
 
         return {
             "answer": FALLBACK_ANSWER,
@@ -230,6 +239,76 @@ Answer:
             "sources": [],
             "success": True,
         }
+
+    def _build_contextual_fallback(self, question: str, retrieved_chunks: list[dict]) -> dict:
+        """Build a concise grounded answer directly from retrieved chunks when the model is unavailable."""
+
+        if not retrieved_chunks:
+            return self._fallback_response([])
+
+        ranked_chunks = sorted(
+            retrieved_chunks,
+            key=lambda chunk: self._chunk_relevance_score(question, chunk),
+            reverse=True,
+        )
+        best_chunk = ranked_chunks[0]
+        excerpt = self._make_excerpt(best_chunk)
+        citation = self._citation_for_chunk(best_chunk)
+        answer = f"Based on the retrieved document context, {excerpt}{citation}".strip()
+
+        return {
+            "answer": answer,
+            "model": self.model,
+            "context_chunks": len(retrieved_chunks),
+            "sources": [
+                {
+                    "chunk_id": best_chunk.get("chunk_id"),
+                    "page_start": best_chunk.get("page_start"),
+                    "page_end": best_chunk.get("page_end"),
+                }
+                for best_chunk in ranked_chunks[:3]
+            ],
+            "success": True,
+        }
+
+    @staticmethod
+    def _chunk_relevance_score(question: str, chunk: dict) -> float:
+        """Estimate how relevant a chunk is to the question using simple token overlap."""
+
+        if not question:
+            return 1.0
+
+        question_terms = set(re.findall(r"[a-z0-9]+", question.lower()))
+        text_terms = set(re.findall(r"[a-z0-9]+", str(chunk.get("text", "")).lower()))
+        if not question_terms:
+            return 0.0
+        return len(question_terms & text_terms)
+
+    @staticmethod
+    def _make_excerpt(chunk: dict) -> str:
+        """Create a short, grounded excerpt from a chunk."""
+
+        text = str(chunk.get("text", "")).strip()
+        if not text:
+            return "No supporting excerpt was available in the retrieved context."
+
+        cleaned = re.sub(r"\s+", " ", text).strip()
+        cleaned = cleaned[:480].rstrip()
+        if len(cleaned) < len(text):
+            cleaned = f"{cleaned}..."
+        return cleaned
+
+    @staticmethod
+    def _citation_for_chunk(chunk: dict) -> str:
+        """Append a compact citation for the selected chunk."""
+
+        page_start = chunk.get("page_start")
+        page_end = chunk.get("page_end")
+        chunk_id = chunk.get("chunk_id")
+        page_label = LLMService._page_label(page_start, page_end)
+        if chunk_id:
+            return f" [source: {chunk_id}, {page_label}]"
+        return f" [{page_label}]"
 
     @staticmethod
     def _page_label(page_start: Any, page_end: Any) -> str:

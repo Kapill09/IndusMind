@@ -6,8 +6,9 @@ INVALID_DOCUMENT_ID_PLACEHOLDERS = {"string", "null", "undefined"}
 def sanitize_document_ids(document_ids: list[str] | str | None) -> list[str] | None:
     """Normalize client-supplied document IDs for safe metadata filtering.
 
-    The API treats empty, whitespace-only, placeholder, and duplicate values as
-    invalid and refuses to apply a document filter when no usable IDs remain.
+    The API treats empty, whitespace-only, placeholder, duplicate values, and
+    empty lists as invalid and refuses to apply a document filter when no usable
+    IDs remain.
     """
 
     if document_ids is None:
@@ -16,6 +17,8 @@ def sanitize_document_ids(document_ids: list[str] | str | None) -> list[str] | N
     if isinstance(document_ids, str):
         raw_ids: list[str] = [document_ids]
     elif isinstance(document_ids, list):
+        if not document_ids:
+            return None
         raw_ids = document_ids
     else:
         return None

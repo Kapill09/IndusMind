@@ -163,18 +163,7 @@ class VectorDBService:
             if where:
                 query_args["where"] = where
 
-            print("=" * 80)
-            print("COLLECTION:", self.collection_name)
-            print("COUNT:", self.collection.count())
-            print("Embedding dimension:", len(query_embedding))
-            print("Top K:", top_k)
-            print("Where:", where)
-            print("=" * 80)
-
             results = self.collection.query(**query_args)
-            print("Returned IDs:", results["ids"])
-            print("Returned distances:", results["distances"])
-            print("=" * 80)
 
         except Exception as exc:
             raise VectorDBOperationError("Failed to search ChromaDB collection.") from exc

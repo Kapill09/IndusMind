@@ -1,49 +1,46 @@
-import { useEffect, useMemo, useState } from "react";
-import type { KnowledgeDocument, UploadResponse } from "@/types";
+import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchDocuments } from "@/lib/api";
+import type { KnowledgeDocument } from "@/types";
 
-const STORAGE_KEY = "indus-mind-documents";
+/** Shared React Query key used by all document consumers. */
+export const DOCUMENTS_QUERY_KEY = ["documents"] as const;
 
+/**
+ * Single source of truth for the document inventory.
+ *
+ * Replaces the previous localStorage-backed hook. Every component that calls
+ * this hook shares the same React Query cache entry, so uploading a document
+ * on the Upload page and invalidating the cache automatically refreshes the
+ * Documents page, Sources popup, Dashboard, and Knowledge Graph.
+ */
 export function useLocalDocuments() {
-  const [documents, setDocuments] = useState<KnowledgeDocument[]>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
+  const queryClient = useQueryClient();
 
-    try {
-      const parsed = JSON.parse(stored) as KnowledgeDocument[];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+  const { data: documents = [], isLoading, isError } = useQuery<KnowledgeDocument[]>({
+    queryKey: DOCUMENTS_QUERY_KEY,
+    queryFn: fetchDocuments,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
-  }, [documents]);
-
-  const addUploadedDocument = (response: UploadResponse) => {
-    const summary = response.ingestion;
-    const document: KnowledgeDocument = {
-      id: `${summary.filename}-${Date.now()}`,
-      filename: summary.filename,
-      pages: summary.pages,
-      chunks: summary.chunks,
-      vectors: summary.vectors,
-      uploadedAt: new Date().toISOString(),
-      status: summary.success ? "indexed" : "failed",
-    };
-
-    setDocuments((current) => [document, ...current.filter((item) => item.filename !== document.filename)]);
+  /**
+   * Call after a successful upload to refresh the document list everywhere.
+   * This replaces the old `addUploadedDocument` callback.
+   */
+  const refreshDocuments = () => {
+    queryClient.invalidateQueries({ queryKey: DOCUMENTS_QUERY_KEY });
   };
 
   const totals = useMemo(
     () => ({
       documents: documents.length,
-      pages: documents.reduce((sum, document) => sum + document.pages, 0),
-      chunks: documents.reduce((sum, document) => sum + document.chunks, 0),
-      vectors: documents.reduce((sum, document) => sum + document.vectors, 0),
+      pages: documents.reduce((sum, doc) => sum + doc.pages, 0),
+      chunks: documents.reduce((sum, doc) => sum + doc.chunks, 0),
+      vectors: documents.reduce((sum, doc) => sum + doc.vectors, 0),
     }),
     [documents],
   );
 
-  return { documents, totals, addUploadedDocument };
+  return { documents, totals, refreshDocuments, isLoading, isError };
 }

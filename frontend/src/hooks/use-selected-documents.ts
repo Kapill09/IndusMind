@@ -20,25 +20,17 @@ export function useSelectedDocuments() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(selected));
   }, [selected]);
 
-  // Helper: derive the vectordb document id from a filename (stem without ext)
-  // The document ID stored in the database is the stem of the filename (filename without the extension)
-  // e.g., "my-document (1).pdf" -> "my-document (1)"
-  const filenameToDocId = (filename: string | undefined) => {
-    if (!filename) return "";
-    const basename = filename.split("/").pop() || filename;
-    // Remove the last extension only (e.g., .pdf)
-    const lastDotIndex = basename.lastIndexOf(".");
-    if (lastDotIndex === -1) return basename;
-    return basename.substring(0, lastDotIndex);
-  };
-
-  // If there are no saved selections, default to all known documents (use filename stem)
+  // Prune stale selections: remove any selected document_id that no longer
+  // exists in the live backend inventory.  This prevents sending IDs to the
+  // retrieval API that ChromaDB can no longer resolve.
   useEffect(() => {
-    if (selected.length === 0 && documents.length > 0) {
-      setSelected(documents.map((d) => filenameToDocId(d.filename)));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documents.length]);
+    if (documents.length === 0) return;
+    const validIds = new Set(documents.map((d) => d.document_id));
+    setSelected((current) => {
+      const pruned = current.filter((id) => validIds.has(id));
+      return pruned.length === current.length ? current : pruned;
+    });
+  }, [documents]);
 
   const toggle = (id: string) => {
     setSelected((current) => (current.includes(id) ? current.filter((i) => i !== id) : [...current, id]));

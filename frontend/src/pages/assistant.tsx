@@ -59,6 +59,7 @@ export function AssistantPage({
           model: response.model,
           entities: response.entities,
           contextChunks: response.context_chunks,
+          retrievalScope: response.retrieval_scope,
         },
       ]);
       onQuestionAnswered();

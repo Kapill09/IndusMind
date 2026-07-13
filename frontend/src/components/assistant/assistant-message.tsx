@@ -110,6 +110,13 @@ export const AssistantMessage = memo(function AssistantMessage({
         </Card>
 
         <div className="flex flex-wrap items-center gap-2">
+          {message.retrievalScope && (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs">
+              <FileSearch className="h-3 w-3 text-primary" aria-hidden="true" />
+              <span className="font-medium text-muted-foreground">Searching:</span>
+              <span className="font-semibold text-foreground">{message.retrievalScope}</span>
+            </div>
+          )}
           <ConfidenceBadge confidence={confidence} sources={message.sources} contextChunks={message.contextChunks} />
           <MetadataChips
             latencyMs={message.latencyMs}

@@ -277,7 +277,7 @@ export function SourcePdfViewerDrawer({
             <div className="flex-1 overflow-hidden">
               {pdfUrl ? (
                 <PDFViewer
-                  key={currentSource?.chunk_id}
+                  key={pdfUrl}
                   pdfUrl={pdfUrl}
                   initialPage={pageStart}
                   highlightText={searchText}

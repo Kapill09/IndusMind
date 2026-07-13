@@ -482,9 +482,17 @@ class RetrievalService:
 
         fused.sort(key=lambda item: item[0], reverse=True)
         fused = self._dedupe_ranked_results(fused)
+        
+        # Enforce minimum relevance threshold to prevent context padding
+        filtered_fused = [item for item in fused if item[0] >= 0.25]
+        
+        # If all chunks were below the threshold, return the best one so we have something
+        if not filtered_fused and fused:
+            filtered_fused = [fused[0]]
+            
         return [
             self._format_result(result, combined_score=score, score_components=components)
-            for score, result, components in fused[:top_k]
+            for score, result, components in filtered_fused[:top_k]
         ]
 
     @staticmethod
@@ -574,19 +582,15 @@ class RetrievalService:
 
     @staticmethod
     def _normalize_distances(distances: dict[str, float]) -> dict[str, float]:
-        """Normalize lower vector distances to higher scores in the candidate set."""
+        """Convert absolute vector distances to similarity scores."""
 
         if not distances:
             return {}
 
-        values = list(distances.values())
-        min_distance = min(values)
-        max_distance = max(values)
-        if max_distance == min_distance:
-            return {chunk_id: 1.0 for chunk_id in distances}
-
+        # Assuming cosine distance where max possible distance is 2.0.
+        # similarity = 1.0 - (distance / 2.0)
         return {
-            chunk_id: round(1.0 - ((distance - min_distance) / (max_distance - min_distance)), 4)
+            chunk_id: round(max(0.0, 1.0 - (distance / 2.0)), 4)
             for chunk_id, distance in distances.items()
         }
 

@@ -5,6 +5,8 @@ from typing import Any, TypedDict
 
 from backend.services.llm_service import LLMService, LLMServiceError
 from backend.services.retrieval_service import RetrievalService, RetrievalServiceError
+from backend.services.reranker_service import RerankerService
+import backend.config as config
 
 
 logger = logging.getLogger(__name__)
@@ -130,14 +132,18 @@ class RAGPipeline:
             # RetrievalService handles embeddings and vector search through its
             # own dependencies; the pipeline only coordinates the call.
             retrieval_started_at = perf_counter()
+            
+            is_reranker_enabled = getattr(config, "ENABLE_RERANKER", False)
+            retrieval_top_k = getattr(config, "RERANK_TOP_N", 20) if is_reranker_enabled else clean_top_k
+            
             retrieval = self.retrieval_service.retrieve(
                 question=clean_question,
-                top_k=clean_top_k,
+                top_k=max(clean_top_k, retrieval_top_k),
                 document_ids=document_ids,
             )
             logger.info(
                 "RAG retrieval completed: top_k=%s results=%s latency_ms=%s",
-                clean_top_k,
+                retrieval_top_k,
                 len(retrieval.get("results", [])),
                 int((perf_counter() - retrieval_started_at) * 1000),
             )
@@ -145,6 +151,36 @@ class RAGPipeline:
             raise RAGPipelineRetrievalError("Failed to retrieve context for the question.") from exc
 
         retrieved_chunks = retrieval.get("results", [])
+        
+        if is_reranker_enabled and len(retrieved_chunks) > 0:
+            reranker = RerankerService()
+            final_top_k = getattr(config, "FINAL_TOP_K", clean_top_k)
+            
+            # Rerank and log top candidate scores
+            top_candidates = reranker.rerank(
+                question=retrieval["question"],
+                chunks=retrieved_chunks,
+                top_k=final_top_k,
+            )
+            
+            cleaned_chunks = self._cleanup_context(top_candidates)
+            
+            logger.info(
+                "Reranking completed: candidates=%d final=%d",
+                len(retrieved_chunks),
+                len(cleaned_chunks),
+            )
+            
+            for chunk in cleaned_chunks:
+                logger.debug(
+                    "Selected Chunk - ID: %s, Reranker Score: %s, Final Score: %s",
+                    chunk["chunk_id"],
+                    chunk.get("metadata", {}).get("reranker_score"),
+                    chunk.get("metadata", {}).get("final_score")
+                )
+                
+            retrieved_chunks = cleaned_chunks
+            retrieval["results"] = retrieved_chunks
 
         try:
             # LLMService receives the retrieved chunks and owns all prompt and
@@ -302,3 +338,37 @@ class RAGPipeline:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _cleanup_context(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Remove duplicate/overlapping chunks and merge consecutive ones."""
+        if not chunks:
+            return []
+            
+        seen = set()
+        unique = []
+        for c in chunks:
+            if c["chunk_id"] not in seen:
+                seen.add(c["chunk_id"])
+                unique.append(c)
+                
+        cleaned = []
+        for chunk in unique:
+            text = chunk.get("text", "").strip()
+            if not text:
+                continue
+                
+            is_overlap = False
+            for existing in cleaned:
+                existing_text = existing.get("text", "")
+                if text in existing_text or existing_text in text:
+                    is_overlap = True
+                    # Keep the larger one
+                    if len(text) > len(existing_text):
+                        existing["text"] = text
+                        existing["chunk_id"] = chunk["chunk_id"]
+                    break
+            if not is_overlap:
+                cleaned.append(chunk)
+                
+        return cleaned

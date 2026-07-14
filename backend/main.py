@@ -15,11 +15,18 @@ from backend.routes.health import router as health_router
 from backend.routes.knowledge_graph import router as knowledge_graph_router
 from backend.routes.context_graph import router as context_graph_router
 from backend.routes.upload import router as upload_router
+from backend.services.reranker_service import RerankerService
+import backend.config as config
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
+
+# Initialize Reranker Model on startup to avoid first-request latency
+if getattr(config, "ENABLE_RERANKER", False):
+    logging.info("Initializing Enterprise Reranker at startup...")
+    RerankerService()
 
 # Create the FastAPI application.
 app = FastAPI(

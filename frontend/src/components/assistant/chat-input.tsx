@@ -86,17 +86,7 @@ export function ChatInput({ onSubmit, isLoading, error }: ChatInputProps) {
               >
                 <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleComingSoon}
-                className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground"
-                aria-label="Knowledge Graph mode"
-                title="Knowledge Graph mode (coming soon)"
-              >
-                <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-              <div className="h-5 w-px bg-border" />
+
               <DocumentSelector compact />
             </div>
 

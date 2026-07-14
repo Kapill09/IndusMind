@@ -9,6 +9,16 @@ export interface KGNode {
   description: string;
 }
 
+/** Data stored on every React Flow node. */
+export interface KGNodeData extends Record<string, unknown> {
+  label: string;
+  type: string;
+  page: number | null;
+  document: string;
+  description: string;
+  originalId: string;
+}
+
 export interface KGEdge {
   source: string;
   target: string;
@@ -23,6 +33,7 @@ export interface KGApiResponse {
 
 /** All recognised entity types from the backend service. */
 export type KGNodeType =
+  | "Question"
   | "Document"
   | "Equipment"
   | "Problem Statements"

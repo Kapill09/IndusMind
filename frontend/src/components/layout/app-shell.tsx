@@ -7,7 +7,6 @@ import {
   Moon,
   Search,
   Settings,
-  Share2,
   Sun,
   UploadCloud,
   X,
@@ -25,7 +24,6 @@ const navigation: Array<{ key: PageKey; label: string; icon: React.ComponentType
   { key: "assistant", label: "AI Assistant", icon: Bot },
   { key: "documents", label: "Documents", icon: FileText },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
-  { key: "knowledge-graph", label: "Knowledge Graph", icon: Share2 },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 

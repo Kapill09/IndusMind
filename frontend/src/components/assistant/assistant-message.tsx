@@ -32,7 +32,7 @@ interface AssistantMessageProps {
   onCopy: (content: string) => void;
   onLike: () => void;
   onDislike: () => void;
-  onOpenKnowledgeGraph: (entities?: Array<{ label: string; type: string }>) => void;
+  onOpenKnowledgeGraph: (message: ChatMessage) => void;
 }
 
 export const AssistantMessage = memo(function AssistantMessage({
@@ -164,12 +164,11 @@ export const AssistantMessage = memo(function AssistantMessage({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onOpenKnowledgeGraph(message.entities)}
+            onClick={() => onOpenKnowledgeGraph(message)}
             className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-            data-entities={JSON.stringify(message.entities ?? [])}
           >
             <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-            Knowledge Graph
+            Visualize Context
           </Button>
           <Button
             variant="ghost"

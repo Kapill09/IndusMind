@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Node, Edge } from "@xyflow/react";
 import { FILTER_TO_NODE_TYPES, type KGFilterKey } from "@/types/knowledge-graph";
-import type { KGNodeData } from "@/hooks/use-knowledge-graph";
+import type { KGNodeData } from "@/types/knowledge-graph";
 
 interface UseGraphInteractionsOptions {
   allNodes: Node<KGNodeData>[];

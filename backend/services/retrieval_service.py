@@ -138,17 +138,8 @@ class RetrievalService:
                 structured_query.original_query,
             )
 
-        try:
-            where = None
-            if clean_document_ids:
-                # Chroma metadata filtering: match document_id in provided list
-                where = {"document_id": {"$in": clean_document_ids}}
-            all_chunks = self.vectordb_service.get_chunks(limit=MAX_KEYWORD_SCAN_CHUNKS, where=where)
-        except VectorDBServiceError as exc:
-            raise RetrievalSearchError("Failed to read chunks for hybrid retrieval.") from exc
-
         if structured_query:
-            structured_candidates = self._structured_candidates(all_chunks, structured_query)
+            structured_candidates = self._fetch_exact_metadata_matches(structured_query, clean_document_ids)
             if structured_candidates:
                 logger.info(
                     "Structured retrieval returned %s candidates and is authoritative; skipping hybrid ranking.",
@@ -162,6 +153,15 @@ class RetrievalService:
                         clean_top_k,
                     ),
                 }
+
+        try:
+            where = None
+            if clean_document_ids:
+                # Chroma metadata filtering: match document_id in provided list
+                where = {"document_id": {"$in": clean_document_ids}}
+            all_chunks = self.vectordb_service.get_chunks(limit=MAX_KEYWORD_SCAN_CHUNKS, where=where)
+        except VectorDBServiceError as exc:
+            raise RetrievalSearchError("Failed to read chunks for hybrid retrieval.") from exc
 
         chunk_by_id = {chunk["chunk_id"]: chunk for chunk in all_chunks}
         structured_scores = self._metadata_scores(all_chunks, structured_query)
@@ -313,50 +313,37 @@ class RetrievalService:
         logger.info("Structured metadata results: %s", self._score_log(scores))
         return scores
 
-    def _structured_candidates(
+    def _fetch_exact_metadata_matches(
         self,
-        chunks: list[VectorSearchResult],
         structured_query: StructuredQuery,
+        document_ids: list[str] | None,
     ) -> list[VectorSearchResult]:
-        """Return chunks that match a structured query exactly or via structured phrase."""
+        """Fetch exact metadata matches directly from the vector database."""
 
-        candidates: list[VectorSearchResult] = []
-        for chunk in chunks:
-            if self._is_structured_match(chunk, structured_query):
-                candidates.append(chunk)
-
-        if not candidates:
-            return []
-
-        return sorted(
-            candidates,
-            key=lambda chunk: self._structured_score(chunk, structured_query),
-            reverse=True,
-        )
-
-    def _is_structured_match(
-        self,
-        chunk: VectorSearchResult,
-        structured_query: StructuredQuery,
-    ) -> bool:
-        metadata = dict(chunk.get("metadata") or {})
-        identifier = RetrievalService._normalize_identifier(structured_query.identifier)
+        where_conditions = []
+        identifier = self._normalize_identifier(structured_query.identifier)
+        metadata_field = STRUCTURED_METADATA_FIELDS.get(structured_query.query_type)
 
         if structured_query.query_type == "page":
-            page_number = RetrievalService._metadata_int(structured_query.identifier)
-            page_start = RetrievalService._metadata_int(metadata.get("page_start"))
-            page_end = RetrievalService._metadata_int(metadata.get("page_end")) or page_start
-            return page_number is not None and page_start is not None and page_end is not None and page_start <= page_number <= page_end
+            page_num = self._metadata_int(structured_query.identifier)
+            if page_num is not None:
+                where_conditions.append({"page_start": page_num})
+        elif metadata_field and identifier:
+            where_conditions.append({metadata_field: identifier})
 
-        metadata_field = STRUCTURED_METADATA_FIELDS.get(structured_query.query_type)
-        if metadata_field:
-            metadata_identifier = RetrievalService._normalize_identifier(metadata.get(metadata_field))
-            if metadata_identifier and metadata_identifier == identifier:
-                return True
+        if not where_conditions:
+            return []
 
-        searchable = RetrievalService._normalize_text(RetrievalService._searchable_text(chunk))
-        phrase = RetrievalService._structured_phrase(structured_query)
-        return bool(phrase and phrase in searchable)
+        if document_ids:
+            where_conditions.append({"document_id": {"$in": document_ids}})
+
+        where = where_conditions[0] if len(where_conditions) == 1 else {"$and": where_conditions}
+
+        try:
+            # Query exactly what we need, bypassing the 5000 limit
+            return self.vectordb_service.get_chunks(limit=100, where=where)
+        except Exception:
+            return []
 
     def _format_structured_results(
         self,
@@ -571,13 +558,12 @@ class RetrievalService:
 
         searchable = RetrievalService._normalize_text(RetrievalService._searchable_text(result))
         phrase = RetrievalService._structured_phrase(structured_query)
+        
+        # Strict exact phrase fallback in case metadata parsing failed
         if phrase and phrase in searchable:
             return 0.9
-        if identifier and re.search(rf"\b{re.escape(identifier)}\b", searchable):
-            type_token = structured_query.query_type.replace("_", " ")
-            if type_token in searchable:
-                return 0.75
 
+        # Removed the loose token/identifier regex search that was causing false positives
         return 0.0
 
     @staticmethod

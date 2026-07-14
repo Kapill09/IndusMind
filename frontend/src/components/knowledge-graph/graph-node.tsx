@@ -6,7 +6,7 @@ import {
   DEFAULT_NODE_COLOR,
   NODE_ICONS,
 } from "@/components/knowledge-graph/knowledge-graph-constants";
-import type { KGNodeData } from "@/hooks/use-knowledge-graph";
+import type { KGNodeData } from "@/types/knowledge-graph";
 
 /**
  * Custom React Flow node with enterprise styling.

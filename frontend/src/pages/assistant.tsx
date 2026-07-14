@@ -12,6 +12,7 @@ import { UserMessage } from "@/components/assistant/user-message";
 import { AssistantMessage } from "@/components/assistant/assistant-message";
 import { SourcesPanelDrawer } from "@/components/assistant/sources-panel-drawer";
 import { SourcePdfViewerDrawer } from "@/components/assistant/source-pdf-viewer-drawer";
+import { ContextGraphDrawer } from "@/components/knowledge-graph/context-graph-drawer";
 
 interface AssistantPageProps {
   messages: ChatMessage[];
@@ -32,6 +33,8 @@ export function AssistantPage({
   const [activePdfSource, setActivePdfSource] = useState<RagSource | null>(null);
   const [activePdfSources, setActivePdfSources] = useState<RagSource[]>([]);
   const [activePdfConfidence, setActivePdfConfidence] = useState<number | undefined>();
+  const [contextGraphMessage, setContextGraphMessage] = useState<ChatMessage | null>(null);
+  const [contextGraphQuestion, setContextGraphQuestion] = useState("");
   const { selected: selectedDocumentIds } = useSelectedDocuments();
 
   // ── Mutation ──
@@ -60,6 +63,7 @@ export function AssistantPage({
           entities: response.entities,
           contextChunks: response.context_chunks,
           retrievalScope: response.retrieval_scope,
+          question: response.question,
         },
       ]);
       onQuestionAnswered();
@@ -186,7 +190,29 @@ export function AssistantPage({
     setActivePdfConfidence(undefined);
   }, []);
 
-  const handleOpenKnowledgeGraph = useCallback(() => {
+  const handleOpenKnowledgeGraph = useCallback((msg: ChatMessage) => {
+    // Find the original user question that produced this assistant message.
+    const msgIndex = messages.findIndex((m) => m.id === msg.id);
+    let userQuestion = msg.question || "";
+    if (!userQuestion && msgIndex > 0) {
+      // Walk backwards to find the preceding user message.
+      for (let i = msgIndex - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          userQuestion = messages[i].content;
+          break;
+        }
+      }
+    }
+    setContextGraphQuestion(userQuestion);
+    setContextGraphMessage(msg);
+  }, [messages]);
+
+  const handleCloseContextGraph = useCallback(() => {
+    setContextGraphMessage(null);
+    setContextGraphQuestion("");
+  }, []);
+
+  const handleNavigateToGlobalGraph = useCallback(() => {
     onNavigate("knowledge-graph");
   }, [onNavigate]);
 
@@ -268,7 +294,16 @@ export function AssistantPage({
         sources={activePdfSources}
         confidenceScore={activePdfConfidence}
         onClose={handleClosePdfViewer}
-        onOpenKnowledgeGraph={handleOpenKnowledgeGraph}
+        onOpenKnowledgeGraph={handleNavigateToGlobalGraph}
+      />
+
+      {/* Context Knowledge Graph drawer */}
+      <ContextGraphDrawer
+        message={contextGraphMessage}
+        question={contextGraphQuestion}
+        onClose={handleCloseContextGraph}
+        onNavigate={onNavigate}
+        onSourceClick={handleSourceClick}
       />
     </div>
   );

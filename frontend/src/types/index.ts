@@ -1,4 +1,4 @@
-export type PageKey = "dashboard" | "assistant" | "upload" | "documents" | "analytics" | "settings" | "knowledge-graph";
+export type PageKey = "dashboard" | "assistant" | "upload" | "documents" | "analytics" | "settings";
 
 export interface UploadSummary {
   filename: string;
@@ -59,6 +59,8 @@ export interface ChatMessage {
   entities?: Array<{ label: string; type: string }>;
   contextChunks?: number;
   retrievalScope?: string;
+  /** Original user question that triggered this response (set on assistant messages). */
+  question?: string;
 }
 
 export interface KnowledgeDocument {

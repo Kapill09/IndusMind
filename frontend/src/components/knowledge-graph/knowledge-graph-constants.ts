@@ -6,6 +6,7 @@ import {
   Cpu,
   File,
   FileText,
+  MessageCircle,
   Scale,
   Shield,
   Wrench,
@@ -14,6 +15,15 @@ import type { NodeColorConfig } from "@/types/knowledge-graph";
 
 /** Maps each backend node type to its visual style. */
 export const NODE_COLORS: Record<string, NodeColorConfig> = {
+  Question: {
+    bg: "bg-amber-100",
+    bgDark: "dark:bg-amber-900/50",
+    border: "border-amber-400",
+    borderDark: "dark:border-amber-600",
+    text: "text-amber-800",
+    textDark: "dark:text-amber-200",
+    glow: "rgba(245,158,11,0.45)",
+  },
   Document: {
     bg: "bg-slate-100",
     bgDark: "dark:bg-slate-800",
@@ -128,6 +138,7 @@ export const DEFAULT_NODE_COLOR: NodeColorConfig = {
 
 /** Maps each node type to a lucide icon component. */
 export const NODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Question: MessageCircle,
   Document: FileText,
   Equipment: Cog,
   "Problem Statements": AlertTriangle,
@@ -143,6 +154,7 @@ export const NODE_ICONS: Record<string, React.ComponentType<{ className?: string
 
 /** Hex colour used for the React Flow minimap node colour. */
 export const MINIMAP_COLORS: Record<string, string> = {
+  Question: "#f59e0b",
   Document: "#64748b",
   Equipment: "#3b82f6",
   "Problem Statements": "#a855f7",

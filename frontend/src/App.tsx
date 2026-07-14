@@ -10,7 +10,6 @@ import { DashboardPage } from "@/pages/dashboard";
 import { DocumentsPage } from "@/pages/documents";
 import { SettingsPage } from "@/pages/settings";
 import { UploadPage } from "@/pages/upload";
-import { KnowledgeGraphPage } from "@/pages/knowledge-graph";
 import type { ChatMessage, PageKey } from "@/types";
 
 const queryClient = new QueryClient({
@@ -74,8 +73,6 @@ function IndusMindApp() {
         return <AnalyticsPage totals={totals} questionsAsked={questionsAsked} />;
       case "settings":
         return <SettingsPage />;
-      case "knowledge-graph":
-        return <KnowledgeGraphPage onNavigate={setActivePage} />;
       case "dashboard":
       default:
         return <DashboardPage documents={documents} totals={totals} questionsAsked={questionsAsked} />;

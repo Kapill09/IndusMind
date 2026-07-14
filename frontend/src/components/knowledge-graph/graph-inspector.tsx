@@ -3,7 +3,7 @@ import type { Node } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { KGNodeData } from "@/hooks/use-knowledge-graph";
+import type { KGNodeData } from "@/types/knowledge-graph";
 import {
   NODE_COLORS,
   DEFAULT_NODE_COLOR,

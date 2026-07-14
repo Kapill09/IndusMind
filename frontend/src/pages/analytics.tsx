@@ -176,7 +176,7 @@ export function AnalyticsPage({ totals, documents, messages }: AnalyticsPageProp
           value={formatNumber(kgMetrics.nodes)} 
           helper={`${formatNumber(kgMetrics.edges)} semantic relationships`} 
           icon={Share2} 
-          tone="purple" 
+          tone="teal" 
         />
         <StatCard 
           label="Average Retrieval Time" 
@@ -333,7 +333,7 @@ export function AnalyticsPage({ totals, documents, messages }: AnalyticsPageProp
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value: number) => [`${value} chunks`, "Vector Count"]}
+                      formatter={(value: any) => [`${value} chunks`, "Vector Count"]}
                       contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }} 
                     />
                   </PieChart>

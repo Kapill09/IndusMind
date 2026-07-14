@@ -15,6 +15,7 @@ import {
 import type React from "react";
 import { cn } from "@/lib/utils";
 import type { PageKey } from "@/types";
+import { useSettings } from "@/context/settings-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +33,6 @@ interface AppShellProps {
   onNavigate: (page: PageKey) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
-  darkMode: boolean;
-  setDarkMode: (value: boolean) => void;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   children: React.ReactNode;
@@ -44,12 +43,12 @@ export function AppShell({
   onNavigate,
   sidebarOpen,
   setSidebarOpen,
-  darkMode,
-  setDarkMode,
   searchQuery,
   onSearchQueryChange,
   children,
 }: AppShellProps) {
+  const { workspaceName, theme, updateSetting } = useSettings();
+  const isDarkMode = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   return (
     <div className="min-h-screen bg-background">
       <aside
@@ -130,7 +129,7 @@ export function AppShell({
           {/* Full state for mobile or expanded desktop */}
           <div className="rounded-2xl border border-border bg-muted/60 p-4 lg:hidden lg:group-hover/sidebar:block whitespace-nowrap">
             <p className="text-sm font-semibold">Current workspace</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground truncate">ET AI Hackathon · Industrial Knowledge Intelligence</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground truncate">{workspaceName} · Industrial Knowledge Intelligence</p>
           </div>
         </div>
       </aside>
@@ -184,10 +183,10 @@ export function AppShell({
             variant="ghost"
             size="icon"
             aria-label="Toggle theme"
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => updateSetting("theme", isDarkMode ? "light" : "dark")}
             className="shrink-0"
           >
-            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
           <Avatar className="shrink-0" />
         </header>

@@ -1,4 +1,4 @@
-export type PageKey = "dashboard" | "assistant" | "upload" | "documents" | "analytics" | "settings";
+export type PageKey = "dashboard" | "assistant" | "upload" | "documents" | "analytics" | "settings" | "knowledge-graph";
 
 export interface UploadSummary {
   filename: string;

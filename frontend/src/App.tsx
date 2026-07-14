@@ -11,6 +11,7 @@ import { DocumentsPage } from "@/pages/documents";
 import { SettingsPage } from "@/pages/settings";
 import { UploadPage } from "@/pages/upload";
 import type { ChatMessage, PageKey } from "@/types";
+import { SettingsProvider } from "@/context/settings-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,7 +27,9 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
-          <IndusMindApp />
+          <SettingsProvider>
+            <IndusMindApp />
+          </SettingsProvider>
         </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>
@@ -39,13 +42,7 @@ function IndusMindApp() {
   const [questionsAsked, setQuestionsAsked] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("indus-mind-theme") === "dark");
   const { documents, totals } = useLocalDocuments();
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-    localStorage.setItem("indus-mind-theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
 
   const page = useMemo(() => {
     switch (activePage) {
@@ -85,8 +82,6 @@ function IndusMindApp() {
       onNavigate={setActivePage}
       sidebarOpen={sidebarOpen}
       setSidebarOpen={setSidebarOpen}
-      darkMode={darkMode}
-      setDarkMode={setDarkMode}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
     >

@@ -120,3 +120,13 @@ export async function fetchDocuments(): Promise<KnowledgeDocument[]> {
     status: (doc.status as KnowledgeDocument["status"]) ?? "indexed",
   }));
 }
+
+export async function fetchKnowledgeGraph(): Promise<{ nodes: any[]; edges: any[] }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/knowledge-graph`);
+  } catch {
+    throw new Error("Unable to reach the knowledge graph API.");
+  }
+  return parseJsonResponse<{ nodes: any[]; edges: any[] }>(response);
+}

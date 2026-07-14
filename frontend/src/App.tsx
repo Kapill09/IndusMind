@@ -70,9 +70,9 @@ function IndusMindApp() {
           />
         );
       case "analytics":
-        return <AnalyticsPage totals={totals} questionsAsked={questionsAsked} />;
+        return <AnalyticsPage totals={totals} documents={documents} messages={messages} />;
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage documents={documents} totals={totals} />;
       case "dashboard":
       default:
         return <DashboardPage documents={documents} totals={totals} questionsAsked={questionsAsked} />;

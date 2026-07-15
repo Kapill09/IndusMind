@@ -28,8 +28,8 @@ class PageText(TypedDict):
 class ChunkingConfig:
     """Settings that control how text is split for retrieval."""
 
-    chunk_size: int = 1000
-    chunk_overlap: int = 150
+    chunk_size: int = 1500  # Character equivalent of ~350 tokens
+    chunk_overlap: int = 300 # 20% overlap
     min_chunk_size: int = 120
     separators: tuple[str, ...] = ("\n\n", "\n", ". ", "; ", ", ", " ")
 
@@ -86,7 +86,7 @@ def chunk_text(
     config: ChunkingConfig | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> list[TextChunk]:
-    """Split plain text into overlapping chunks for a RAG pipeline.
+    """Split plain text into overlapping structure-aware chunks.
 
     Args:
         text: Full document text to split.
@@ -96,44 +96,65 @@ def chunk_text(
 
     Returns:
         A list of structured chunks with text, offsets, token estimate, and metadata.
-
-    Raises:
-        ChunkingError: If the config is invalid.
     """
 
     active_config = config or ChunkingConfig()
     _validate_config(active_config)
 
-    # Normalize whitespace so embeddings are not polluted by repeated spaces.
     normalized_text = _normalize_text(text)
     if not normalized_text:
         return []
 
     base_metadata = metadata or {}
-    chunk_ranges = _build_chunk_ranges(normalized_text, active_config)
+    
+    # Identify headings globally in the document
+    headings_map = _map_document_headings(normalized_text)
+    
+    chunk_ranges = _build_chunk_ranges(normalized_text, active_config, headings_map)
     chunk_ranges = _merge_tiny_heading_ranges(normalized_text, chunk_ranges, active_config)
 
     chunks: list[TextChunk] = []
+    current_parent_heading = ""
+    
     for index, (start, end) in enumerate(chunk_ranges, start=1):
         chunk_body = normalized_text[start:end].strip()
         if not chunk_body:
             continue
 
+        # Check if the chunk starts with a heading
+        first_heading = _extract_heading(chunk_body)
+        if first_heading:
+            current_parent_heading = first_heading
+            
+        # Contextualize: prepend parent heading if the chunk doesn't have it
+        if current_parent_heading and not chunk_body.startswith(current_parent_heading):
+            contextualized_text = f"{current_parent_heading}\n\n{chunk_body}"
+        else:
+            contextualized_text = chunk_body
+
         structured_metadata = _extract_structured_metadata(chunk_body)
         chunk_metadata = _merge_metadata(base_metadata, structured_metadata)
+        
+        # Tag chunk type (table detection)
+        chunk_type = "table" if _looks_like_table(chunk_body) else "body"
+        if first_heading and len(chunk_body) < 150:
+            chunk_type = "section_header"
+
         chunks.append(
             {
                 "chunk_id": f"{document_id}:chunk-{index:04d}",
-                "text": chunk_body,
+                "text": contextualized_text,
                 "page_start": None,
                 "page_end": None,
                 "char_start": start,
                 "char_end": end,
-                "token_estimate": _estimate_tokens(chunk_body),
+                "token_estimate": _estimate_tokens(contextualized_text),
                 "metadata": {
                     **chunk_metadata,
                     "document_id": document_id,
                     "chunk_index": index,
+                    "parent_heading": current_parent_heading,
+                    "chunk_type": chunk_type,
                 },
             }
         )
@@ -154,19 +175,8 @@ def chunk_pages(
     config: ChunkingConfig | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> list[TextChunk]:
-    """Split page-wise PDF text into chunks while preserving page metadata.
+    """Split page-wise PDF text into chunks while preserving page metadata."""
 
-    Args:
-        pages: Page text dictionaries, usually returned by the PDF parsing service.
-        document_id: Stable ID used to build deterministic chunk IDs.
-        config: Optional chunking settings.
-        metadata: Extra metadata copied onto every chunk.
-
-    Returns:
-        A list of chunks with page ranges and character offsets.
-    """
-
-    # Join pages with clear boundaries so chunks can cross pages when useful.
     full_text_parts: list[str] = []
     page_ranges: list[tuple[int, int, int]] = []
     cursor = 0
@@ -193,7 +203,6 @@ def chunk_pages(
         metadata=metadata,
     )
 
-    # Add page_start and page_end after chunking by comparing character offsets.
     for chunk in chunks:
         page_start, page_end = _find_page_range(
             chunk["char_start"],
@@ -212,8 +221,6 @@ def chunk_pages(
 
 
 def _validate_config(config: ChunkingConfig) -> None:
-    """Validate chunking settings before processing starts."""
-
     if config.chunk_size <= 0:
         raise ChunkingError("chunk_size must be greater than 0.")
     if config.chunk_overlap < 0:
@@ -225,26 +232,49 @@ def _validate_config(config: ChunkingConfig) -> None:
 
 
 def _normalize_text(text: str) -> str:
-    """Clean repeated whitespace while preserving paragraph breaks."""
-
-    # Convert Windows and old Mac line endings to standard newlines.
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-    # Remove repeated spaces and tabs, but leave newlines intact.
     text = re.sub(r"[ \t]+", " ", text)
-
-    # Keep paragraph boundaries readable without allowing huge blank areas.
     text = re.sub(r"\n{3,}", "\n\n", text)
-
     return text.strip()
 
 
+def _map_document_headings(text: str) -> list[int]:
+    """Find character offsets of all likely headings in the document."""
+    heading_offsets = []
+    lines = text.splitlines(keepends=True)
+    cursor = 0
+    
+    for i, line in enumerate(lines):
+        clean_line = line.strip(" :-\t")
+        if clean_line and _looks_like_heading(clean_line):
+            heading_offsets.append(cursor)
+        cursor += len(line)
+        
+    return heading_offsets
+
+
+def _looks_like_table(text: str) -> bool:
+    """Heuristic to detect if a chunk is mostly tabular data."""
+    lines = text.splitlines()
+    if len(lines) < 3:
+        return False
+    
+    # Check for pipe-separated or densely aligned columns
+    pipe_lines = sum(1 for line in lines if line.count("|") >= 2)
+    if pipe_lines >= 3:
+        return True
+        
+    # Check for multiple spaces acting as delimiters
+    spaced_lines = sum(1 for line in lines if re.search(r" {3,}", line))
+    if spaced_lines >= 3:
+        return True
+        
+    return False
+
+
 def _extract_structured_metadata(text: str) -> dict[str, str]:
-    """Extract navigational metadata used for hybrid retrieval."""
-
     metadata: dict[str, str] = {}
-
-    # Extract the first heading/title in the chunk.
+    
     first_heading = _extract_heading(text)
     if first_heading:
         metadata["heading"] = first_heading
@@ -255,11 +285,6 @@ def _extract_structured_metadata(text: str) -> dict[str, str]:
         if match:
             metadata[metadata_key] = match.group(1).strip()
 
-    # Support PDFs formatted like:
-    #
-    # 8
-    # AI for Industrial Knowledge Intelligence
-    #
     number_title_match = re.search(
         r"(?:^|\n)\s*(\d{1,2})\s*\n+\s*([^\n]{5,150})",
         text,
@@ -286,8 +311,6 @@ def _extract_structured_metadata(text: str) -> dict[str, str]:
 
 
 def _extract_heading(text: str) -> str | None:
-    """Find a likely heading near the start of a chunk."""
-
     lines = [
         raw_line.strip(" :-\t")
         for raw_line in text.splitlines()[:8]
@@ -298,8 +321,6 @@ def _extract_heading(text: str) -> str | None:
         if not line or len(line) > 140:
             continue
 
-        # Number + title layouts are common in hackathon/problem PDFs.
-        # Prefer the title line over returning the standalone number.
         if re.fullmatch(r"\d{1,3}", line):
             if index + 1 < len(lines):
                 next_line = lines[index + 1]
@@ -326,8 +347,6 @@ def _extract_heading(text: str) -> str | None:
 
 
 def _looks_like_heading(line: str) -> bool:
-    """Return True for compact title-like lines near the start of a chunk."""
-
     words = re.findall(r"[A-Za-z][A-Za-z0-9&+/#.-]*", line)
     if not words or len(words) > 14:
         return False
@@ -343,26 +362,34 @@ def _looks_like_heading(line: str) -> bool:
     if title_case_words >= max(1, len(words) - 1):
         return True
 
-    # Allow short mixed-case headings such as "eGovernance Assistant" or
-    # "AI powered QA" without accepting long body sentences.
     if len(words) <= 8 and title_case_words >= 1:
         return True
 
     return False
 
 
-def _build_chunk_ranges(text: str, config: ChunkingConfig) -> list[tuple[int, int]]:
-    """Create start and end offsets for each chunk."""
-
+def _build_chunk_ranges(
+    text: str, config: ChunkingConfig, headings_map: list[int]
+) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     text_length = len(text)
     start = 0
 
     while start < text_length:
         target_end = min(start + config.chunk_size, text_length)
-        end = _choose_split_point(text, start, target_end, config)
+        
+        # 1. Try to split at a heading boundary if one is nearby
+        heading_split = -1
+        for h_offset in headings_map:
+            if start + config.min_chunk_size < h_offset <= target_end:
+                heading_split = max(heading_split, h_offset)
+                
+        if heading_split != -1:
+            end = heading_split
+        else:
+            # 2. Fallback to normal semantic splitting
+            end = _choose_split_point(text, start, target_end, config)
 
-        # Avoid tiny final chunks by merging them into the previous chunk.
         if ranges and text_length - end < config.min_chunk_size:
             ranges[-1] = (ranges[-1][0], text_length)
             break
@@ -372,8 +399,11 @@ def _build_chunk_ranges(text: str, config: ChunkingConfig) -> list[tuple[int, in
         if end == text_length:
             break
 
-        # Overlap gives retrievers context that may span chunk boundaries.
-        start = _choose_overlap_start(text, start, end, config.chunk_overlap)
+        # If we split exactly at a heading, don't overlap previous body text into the new heading
+        if heading_split != -1 and end == heading_split:
+            start = end
+        else:
+            start = _choose_overlap_start(text, start, end, config.chunk_overlap)
 
     return ranges
 
@@ -383,8 +413,6 @@ def _merge_tiny_heading_ranges(
     ranges: list[tuple[int, int]],
     config: ChunkingConfig,
 ) -> list[tuple[int, int]]:
-    """Attach heading-only chunks to the content that follows."""
-
     if len(ranges) < 2:
         return ranges
 
@@ -406,8 +434,6 @@ def _merge_tiny_heading_ranges(
 
 
 def _is_tiny_heading_chunk(text: str, config: ChunkingConfig) -> bool:
-    """Return True when a chunk is only a short heading/title."""
-
     lines = [line.strip(" :-\t") for line in text.splitlines() if line.strip(" :-\t")]
     if not lines:
         return False
@@ -427,8 +453,6 @@ def _choose_split_point(
     target_end: int,
     config: ChunkingConfig,
 ) -> int:
-    """Prefer natural breakpoints such as paragraphs and sentences."""
-
     if target_end >= len(text):
         return len(text)
 
@@ -447,8 +471,6 @@ def _choose_split_point(
 
 
 def _would_split_heading_from_body(text: str, split_index: int) -> bool:
-    """Avoid a chunk boundary immediately after a heading line."""
-
     before = text[:split_index].rstrip()
     after = text[split_index:].lstrip()
     if not before or not after:
@@ -466,20 +488,15 @@ def _merge_metadata(
     base_metadata: dict[str, Any],
     structured_metadata: dict[str, str],
 ) -> dict[str, Any]:
-    """Merge metadata without replacing existing strong values."""
-
     merged = dict(base_metadata)
     for key, value in structured_metadata.items():
         if _has_metadata_value(merged.get(key)):
             continue
         merged[key] = value
-
     return merged
 
 
 def _has_metadata_value(value: Any) -> bool:
-    """Return True for metadata values that should not be downgraded."""
-
     if value is None:
         return False
     if isinstance(value, str):
@@ -488,13 +505,10 @@ def _has_metadata_value(value: Any) -> bool:
 
 
 def _choose_overlap_start(text: str, previous_start: int, previous_end: int, overlap: int) -> int:
-    """Choose the next chunk start without cutting through a word."""
-
     raw_start = max(previous_end - overlap, previous_start + 1)
     if raw_start >= len(text) or text[raw_start].isspace():
         return raw_start
 
-    # Move forward to the next whitespace so chunks begin cleanly.
     next_space = text.find(" ", raw_start, previous_end)
     next_newline = text.find("\n", raw_start, previous_end)
     candidates = [index for index in (next_space, next_newline) if index != -1]
@@ -510,22 +524,15 @@ def _find_page_range(
     chunk_end: int,
     page_ranges: list[tuple[int, int, int]],
 ) -> tuple[int | None, int | None]:
-    """Find the first and last page touched by a chunk."""
-
     touched_pages = [
         page_number
         for page_number, page_start, page_end in page_ranges
         if chunk_start < page_end and chunk_end > page_start
     ]
-
     if not touched_pages:
         return None, None
-
     return min(touched_pages), max(touched_pages)
 
 
 def _estimate_tokens(text: str) -> int:
-    """Estimate token count without requiring a tokenizer dependency."""
-
-    # English technical text is often close to four characters per token.
     return max(1, len(text) // 4)

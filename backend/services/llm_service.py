@@ -109,7 +109,7 @@ class LLMService:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    max_output_tokens=700,
+                    max_output_tokens=1200,
                 ),
             )
         except Exception as exc:

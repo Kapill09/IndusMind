@@ -12,6 +12,7 @@ from backend.services.vectordb_service import (
     VectorDBService,
     VectorDBServiceError,
 )
+from backend.services.bm25_service import BM25Service
 
 
 logger = logging.getLogger(__name__)
@@ -72,11 +73,13 @@ class IngestionPipeline:
         pdf_service: PDFService,
         embedding_service: EmbeddingService,
         vectordb_service: VectorDBService,
+        bm25_service: BM25Service | None = None,
     ) -> None:
         # Services are injected so the pipeline is easy to test and replace.
         self.pdf_service = pdf_service
         self.embedding_service = embedding_service
         self.vectordb_service = vectordb_service
+        self.bm25_service = bm25_service or BM25Service()
 
     def ingest_document(self, pdf_path: str | Path) -> IngestionSummary:
         """Ingest one PDF into the industrial knowledge ChromaDB collection."""
@@ -153,6 +156,25 @@ class IngestionPipeline:
             )
         except VectorDBServiceError as exc:
             raise IngestionStorageError(f"Failed to store vectors for '{path.name}'.") from exc
+
+        # Step 4.5: Update BM25 index
+        try:
+            started_at = perf_counter()
+            self.bm25_service.add_document([
+                {
+                    "chunk_id": c["chunk_id"],
+                    "text": c["text"],
+                    "metadata": c["metadata"]
+                } for c in stored_chunks
+            ])
+            logger.info(
+                "BM25 index updated: filename=%s chunks=%s latency_ms=%s",
+                path.name,
+                len(stored_chunks),
+                int((perf_counter() - started_at) * 1000),
+            )
+        except Exception:
+            logger.exception("Failed to update BM25 index for %s", path.name)
 
         logger.info(
             "Ingestion completed: filename=%s pages=%s chunks=%s vectors=%s total_latency_ms=%s",

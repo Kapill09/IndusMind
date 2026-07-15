@@ -3,8 +3,15 @@ from collections.abc import Sequence
 from time import perf_counter
 from typing import Any, ClassVar
 
+import backend.config as config
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL = getattr(config, "EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+
+# BGE models require a query prefix for optimal retrieval performance.
+# Document text is embedded without prefix.
+_BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+_BGE_MODEL_PREFIXES = {"bge-base", "bge-large", "bge-small"}
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,6 +42,9 @@ class EmbeddingService:
     vectors. It intentionally does not store vectors, query ChromaDB, retrieve
     documents, or use LangChain.
 
+    Supports instruction-tuned models (BGE family) that require different
+    prefixes for queries vs. documents to maximize retrieval quality.
+
     Args:
         api_key: Accepted for backward compatibility. It is not used by the
             local Sentence Transformer implementation.
@@ -56,12 +66,15 @@ class EmbeddingService:
         _ = api_key
         self.model = model
         self.client = client or self._get_model(model)
+        self._is_bge = self._detect_bge(model)
 
-    def generate_embedding(self, text: str) -> list[float]:
+    def generate_embedding(self, text: str, *, is_query: bool = True) -> list[float]:
         """Generate one embedding vector for one text string.
 
         Args:
             text: Non-empty text to embed.
+            is_query: If True, apply query prefix for instruction-tuned models.
+                      Set to False when embedding document chunks.
 
         Returns:
             The embedding vector as a Python list of floats.
@@ -72,13 +85,15 @@ class EmbeddingService:
         """
 
         # Reuse batch generation so single and batch behavior stay consistent.
-        return self.generate_embeddings([text])[0]
+        return self.generate_embeddings([text], is_query=is_query)[0]
 
-    def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
+    def generate_embeddings(self, texts: list[str], *, is_query: bool = False) -> list[list[float]]:
         """Generate embedding vectors for multiple text strings.
 
         Args:
             texts: List of non-empty text strings to embed.
+            is_query: If True, apply query prefix for instruction-tuned models.
+                      Default is False (document embedding mode for batch calls).
 
         Returns:
             Embedding vectors in the same order as the input texts as Python
@@ -92,9 +107,15 @@ class EmbeddingService:
         clean_texts = self._validate_texts(texts)
         started_at = perf_counter()
 
+        # Apply BGE query prefix for instruction-tuned models when generating
+        # query embeddings.  Document embeddings use raw text.
+        encode_texts = clean_texts
+        if is_query and self._is_bge:
+            encode_texts = [f"{_BGE_QUERY_PREFIX}{t}" for t in clean_texts]
+
         try:
             embeddings = self.client.encode(
-                clean_texts,
+                encode_texts,
                 convert_to_numpy=True,
                 normalize_embeddings=True,
                 show_progress_bar=False,
@@ -103,15 +124,21 @@ class EmbeddingService:
             raise EmbeddingAPIError("Sentence Transformers failed to generate embeddings.") from exc
 
         logger.info(
-            "Embeddings generated: model=%s texts=%s latency_ms=%s",
+            "Embeddings generated: model=%s texts=%s is_query=%s latency_ms=%s",
             self.model,
             len(clean_texts),
+            is_query,
             int((perf_counter() - started_at) * 1000),
         )
 
         # Sentence Transformers returns a numpy array here; convert it before
         # leaving the service so downstream code receives plain Python lists.
         return self._to_python_embeddings(embeddings)
+
+    @property
+    def embedding_dimension(self) -> int:
+        """Return the output dimension of the loaded model."""
+        return int(self.client.get_sentence_embedding_dimension())
 
     @classmethod
     def _get_model(cls, model_name: str) -> Any:
@@ -133,6 +160,12 @@ class EmbeddingService:
                 ) from exc
 
         return cls._model_cache[model_name]
+
+    @staticmethod
+    def _detect_bge(model_name: str) -> bool:
+        """Detect whether the model is from the BGE family and needs query prefix."""
+        model_lower = model_name.lower()
+        return any(prefix in model_lower for prefix in _BGE_MODEL_PREFIXES)
 
     @staticmethod
     def _validate_texts(texts: Sequence[str]) -> list[str]:

@@ -18,6 +18,10 @@ class RerankerService:
 
     Loads the cross-encoder model as a singleton and provides scoring
     without breaking encapsulation of RetrievalService.
+
+    The reranker uses genuine cross-encoder relevance scores without
+    artificial boosts.  Structured metadata matches are handled via
+    guaranteed slots instead of score hacking.
     """
 
     _instance = None
@@ -31,8 +35,10 @@ class RerankerService:
     def __init__(self, model_name: str | None = None) -> None:
         if not hasattr(self, "_initialized"):
             self.model_name = model_name or getattr(
-                config, "RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+                config, "RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-12-v2"
             )
+            self._min_score = getattr(config, "MIN_RERANKER_SCORE", -4.0)
+            self._guaranteed_slots = getattr(config, "RERANKER_GUARANTEED_STRUCTURED_SLOTS", 2)
             self._load_model()
             self._initialized = True
 
@@ -53,13 +59,20 @@ class RerankerService:
                 ) from exc
 
     def rerank(
-        self, question: str, chunks: list[dict[str, Any]], top_k: int = 5
+        self, question: str, chunks: list[dict[str, Any]], top_k: int = 8
     ) -> list[dict[str, Any]]:
-        """Rerank chunks using the cross-encoder, preserving structured retrieval dominance.
+        """Rerank chunks using the cross-encoder with guaranteed slots for structured matches.
+
+        Architecture:
+        1. Score all chunks with the cross-encoder (genuine relevance)
+        2. Identify structured metadata matches (exact section/problem matches)
+        3. Reserve top N slots for structured matches (if they exist)
+        4. Fill remaining slots from cross-encoder ranking
+        5. Apply minimum score threshold to filter noise
 
         Args:
             question: The user question.
-            chunks: List of candidate chunks from Hybrid Retrieval.
+            chunks: List of candidate chunks from hybrid retrieval.
             top_k: Number of chunks to return.
 
         Returns:
@@ -82,28 +95,56 @@ class RerankerService:
             logger.exception("Reranker model prediction failed, falling back to original ordering.")
             return chunks[:top_k]
 
+        # Attach cross-encoder scores to chunks
         for i, chunk in enumerate(chunks):
             metadata = chunk.setdefault("metadata", {})
-            
             reranker_score = float(scores[i])
             metadata["reranker_score"] = round(reranker_score, 4)
+            chunk["score"] = round(reranker_score, 4)
 
-            combined_score = chunk.get("score", 0.0)
-            metadata["combined_score"] = round(combined_score, 4)
+        # Separate structured matches from regular results
+        structured_matches: list[dict[str, Any]] = []
+        regular_chunks: list[dict[str, Any]] = []
 
-            structured_score = metadata.get("structured_score", 0.0)
-
-            # Final score calculation: primarily based on reranker, but structured
-            # matches get a massive boost to ensure they never lose to pure semantic matches.
-            final_score = reranker_score
+        for chunk in chunks:
+            metadata = chunk.get("metadata", {})
+            structured_score = float(metadata.get("structured_score", 0.0) or 0.0)
             if structured_score > 0.5:
-                # Add a very large constant to ensure it stays at the top
-                final_score += 100.0 + (structured_score * 10)
+                structured_matches.append(chunk)
+            else:
+                regular_chunks.append(chunk)
 
-            metadata["final_score"] = round(final_score, 4)
-            chunk["score"] = round(final_score, 4)
+        # Sort each group by cross-encoder score (genuine relevance)
+        structured_matches.sort(key=lambda x: x["score"], reverse=True)
+        regular_chunks.sort(key=lambda x: x["score"], reverse=True)
 
-        # Sort descending by final score
-        chunks.sort(key=lambda x: x["score"], reverse=True)
+        # Apply minimum score threshold to regular chunks
+        regular_chunks = [c for c in regular_chunks if c["score"] >= self._min_score]
 
-        return chunks[:top_k]
+        # Build final list: guaranteed slots for structured matches, then fill from regular
+        final: list[dict[str, Any]] = []
+        guaranteed_count = min(self._guaranteed_slots, len(structured_matches))
+
+        # Add guaranteed structured matches
+        for chunk in structured_matches[:guaranteed_count]:
+            final.append(chunk)
+
+        # Fill remaining slots from regular chunks (and any remaining structured matches)
+        remaining_pool = structured_matches[guaranteed_count:] + regular_chunks
+        remaining_pool.sort(key=lambda x: x["score"], reverse=True)
+
+        for chunk in remaining_pool:
+            if len(final) >= top_k:
+                break
+            if chunk["chunk_id"] not in {c["chunk_id"] for c in final}:
+                final.append(chunk)
+
+        logger.info(
+            "Reranking completed: candidates=%d structured=%d guaranteed=%d final=%d",
+            len(chunks),
+            len(structured_matches),
+            guaranteed_count,
+            len(final),
+        )
+
+        return final

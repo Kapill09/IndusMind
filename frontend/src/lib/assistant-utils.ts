@@ -75,75 +75,54 @@ export function buildStructuredAnswerSections(answer: string, sources?: RagSourc
     ];
   }
 
-  const sectionPattern =
-  /^(#{1,3})\s*(Summary|Key Findings|Detailed Explanation|Recommendations|Related Concepts|Sources)/gm;
-  const safePattern = sectionPattern.global
-    ? sectionPattern
-    : new RegExp(sectionPattern.source, sectionPattern.flags + "g");
+  const sectionPattern = /^(#{1,3})\s+(.+)$/gm;
+  const sections: StructuredSection[] = [];
+  let match;
+  
+  const firstHeaderMatch = sectionPattern.exec(normalizedAnswer);
+  if (firstHeaderMatch && firstHeaderMatch.index > 0) {
+     const preamble = normalizedAnswer.slice(0, firstHeaderMatch.index).trim();
+     if (preamble) {
+         sections.push({ id: "overview", title: "Overview", content: preamble });
+     }
+  }
+  
+  sectionPattern.lastIndex = 0;
 
-  const headingMatches = Array.from(normalizedAnswer.matchAll(safePattern));
-  if (headingMatches.length > 0) {
-    const sections = [
-      { id: "summary", title: "Summary", content: "" },
-      { id: "key-findings", title: "Key Findings", content: "" },
-      { id: "detailed-explanation", title: "Detailed Explanation", content: "" },
-      { id: "recommendations", title: "Recommendations", content: "" },
-      { id: "related-concepts", title: "Related Concepts", content: "" },
-      { id: "sources", title: "Sources", content: "" },
-    ];
+  let currentTitle = "Overview";
+  let currentContentStart = 0;
 
-    const blocks = normalizedAnswer.split(sectionPattern).filter(Boolean);
-    const bodySections = blocks.slice(1).filter((block) => block.trim());
-    const sectionMap = new Map<string, string>();
-
-    headingMatches.forEach((match, index) => {
-      const heading = String(match[0]).toLowerCase();
-      const content = bodySections[index]?.trim() ?? "";
-      if (content) {
-        sectionMap.set(heading, content);
-      }
-    });
-
-    return sections
-      .map((section) => {
-        const normalizedTitle = section.title.toLowerCase();
-        const content = sectionMap.get(normalizedTitle) ?? sectionMap.get(normalizedTitle.replace(/ /g, "-")) ?? "";
-        return content ? { ...section, content } : null;
-      })
-      .filter((section): section is StructuredSection => Boolean(section));
+  while ((match = sectionPattern.exec(normalizedAnswer)) !== null) {
+    if (currentContentStart > 0 || currentTitle !== "Overview") {
+       const content = normalizedAnswer.slice(currentContentStart, match.index).trim();
+       if (content) {
+           sections.push({
+               id: currentTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+               title: currentTitle,
+               content: content
+           });
+       }
+    }
+    
+    currentTitle = match[2].trim();
+    currentContentStart = match.index + match[0].length;
+  }
+  
+  if (currentContentStart > 0 && currentContentStart < normalizedAnswer.length) {
+     const content = normalizedAnswer.slice(currentContentStart).trim();
+     if (content) {
+         sections.push({
+             id: currentTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+             title: currentTitle,
+             content: content
+         });
+     }
   }
 
-  const paragraphs = normalizedAnswer
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+  if (sections.length === 0) {
+      sections.push({ id: "overview", title: "Analysis", content: normalizedAnswer });
+  }
 
-  const summary = paragraphs[0] ?? normalizedAnswer;
-  const detailedExplanation = paragraphs.slice(1).join("\n\n") || normalizedAnswer;
-  const recommendations = /recommend|should|consider|plan|next step/i.test(normalizedAnswer)
-    ? paragraphs.filter((paragraph) => /recommend|should|consider|plan|next step/i.test(paragraph)).join("\n\n")
-    : "";
-  const relatedConcepts = /related|concept|similar|equivalent|standard/i.test(normalizedAnswer)
-    ? paragraphs.filter((paragraph) => /related|concept|similar|equivalent|standard/i.test(paragraph)).join("\n\n")
-    : "";
-
-  const sections: StructuredSection[] = [{ id: "summary", title: "Summary", content: summary }];
-  if (detailedExplanation && detailedExplanation !== summary) {
-    sections.push({ id: "detailed-explanation", title: "Detailed Explanation", content: detailedExplanation });
-  }
-  if (recommendations) {
-    sections.push({ id: "recommendations", title: "Recommendations", content: recommendations });
-  }
-  if (relatedConcepts) {
-    sections.push({ id: "related-concepts", title: "Related Concepts", content: relatedConcepts });
-  }
-  if (sources?.length) {
-    sections.push({
-      id: "sources",
-      title: "Sources",
-      content: sources.map((source) => `- ${source.metadata?.filename ?? "Uploaded document"}`).join("\n"),
-    });
-  }
   return sections;
 }
 

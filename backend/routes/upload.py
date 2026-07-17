@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 from time import perf_counter
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks
 
 from backend.pipeline.ingestion_pipeline import (
     IngestionPipeline,
@@ -11,6 +11,7 @@ from backend.pipeline.ingestion_pipeline import (
 from backend.services.embedding_service import EmbeddingService
 from backend.services.pdf_service import PDFService
 from backend.services.vectordb_service import VectorDBService
+from backend.services.task_state_service import TaskStateService
 
 
 # -----------------------------
@@ -33,6 +34,7 @@ RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 pdf_service = PDFService()
 vectordb_service = VectorDBService()
+task_state_service = TaskStateService()
 ingestion_pipeline: IngestionPipeline | None = None
 
 
@@ -49,6 +51,15 @@ def get_ingestion_pipeline() -> IngestionPipeline:
 
     return ingestion_pipeline
 
+def run_ingestion_task(task_id: str, file_path: Path):
+    try:
+        task_state_service.update_task_status(task_id, "PROCESSING")
+        summary = get_ingestion_pipeline().ingest_document(file_path)
+        task_state_service.update_task_status(task_id, "COMPLETED", result=summary)
+    except Exception as exc:
+        logger.exception("PDF ingestion failed for task %s", task_id)
+        task_state_service.update_task_status(task_id, "FAILED", error_message=str(exc))
+
 
 # -----------------------------
 # Upload Endpoint
@@ -57,9 +68,9 @@ def get_ingestion_pipeline() -> IngestionPipeline:
 @router.post(
     "/upload",
     summary="Upload Industrial PDF",
-    description="Upload manuals, SOPs, maintenance logs and automatically ingest them into the RAG knowledge base.",
+    description="Upload manuals, SOPs, maintenance logs and automatically ingest them into the RAG knowledge base in the background.",
 )
-async def upload_pdf(file: UploadFile):
+async def upload_pdf(file: UploadFile, background_tasks: BackgroundTasks):
     started_at = perf_counter()
     filename = file.filename or ""
 
@@ -89,29 +100,33 @@ async def upload_pdf(file: UploadFile):
             file_size += len(chunk)
             saved_file.write(chunk)
 
-    # Automatically process the uploaded PDF.
-    try:
-        summary = get_ingestion_pipeline().ingest_document(file_path)
-
-    except IngestionPipelineError as exc:
-        logger.exception("PDF ingestion failed for %s", safe_filename)
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
+    # Automatically process the uploaded PDF in the background.
+    task_id = task_state_service.create_task()
+    background_tasks.add_task(run_ingestion_task, task_id, file_path)
 
     total_time_ms = int((perf_counter() - started_at) * 1000)
     logger.info(
-        "Upload completed: filename=%s size_bytes=%s chunks=%s total_latency_ms=%s",
+        "Upload completed: filename=%s size_bytes=%s total_latency_ms=%s",
         safe_filename,
         file_size,
-        summary["chunks"],
         total_time_ms,
     )
 
     return {
         "success": True,
+        "task_id": task_id,
         "filename": safe_filename,
         "file_size": file_size,
-        "ingestion": summary,
+        "message": "Document uploaded and ingestion started in the background.",
     }
+
+@router.get(
+    "/upload/status/{task_id}",
+    summary="Check Ingestion Status",
+    description="Check the status of an asynchronous background ingestion task.",
+)
+async def get_upload_status(task_id: str):
+    task = task_state_service.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    return task

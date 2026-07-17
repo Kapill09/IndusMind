@@ -149,8 +149,6 @@ class AnswerEngine:
             return self._fallback_response(clean_question, retrieval_response, retrieval_summary)
 
         confidence = self._calculate_confidence(context_items, retrieval_summary)
-        if confidence < MIN_CONFIDENCE_THRESHOLD:
-            return self._fallback_response(clean_question, retrieval_response, retrieval_summary, confidence)
 
         prompt = self.prompt_builder.build_prompt(clean_question, context_items)
         try:

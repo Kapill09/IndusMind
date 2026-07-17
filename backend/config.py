@@ -37,3 +37,12 @@ MAX_SEMANTIC_CANDIDATES = 50
 
 # ── Grounding ─────────────────────────────────────────────────────────
 MIN_CONFIDENCE_THRESHOLD = 35  # 0-100 scale
+
+# ── Context Construction ──────────────────────────────────────────────
+MAX_CONTEXT_TOKENS = 6000
+NEIGHBOR_EXPANSION_COUNT = 1
+
+# ── General ───────────────────────────────────────────────────────────
+FALLBACK_ANSWER = "I couldn't find this information in the uploaded industrial documents."
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+

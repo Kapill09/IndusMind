@@ -242,7 +242,7 @@ Category:"""
             started_at = perf_counter()
 
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.0,
@@ -316,7 +316,7 @@ Sub-queries:"""
             from google.genai import types
 
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.0,
@@ -382,7 +382,7 @@ Passage:"""
             from google.genai import types
 
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,

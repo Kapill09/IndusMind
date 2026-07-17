@@ -28,6 +28,20 @@ if getattr(config, "ENABLE_RERANKER", False):
     logging.info("Initializing Enterprise Reranker at startup...")
     RerankerService()
 
+import importlib.metadata
+try:
+    genai_sdk_version = importlib.metadata.version('google-genai')
+except importlib.metadata.PackageNotFoundError:
+    genai_sdk_version = "Unknown"
+
+from backend.services.llm_service import GEMINI_MODEL
+logging.info("====================================================")
+logging.info("GEMINI CONFIGURATION")
+logging.info(f"Model Name: {GEMINI_MODEL}")
+logging.info(f"SDK Version: {genai_sdk_version}")
+logging.info(f"Endpoint: https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent")
+logging.info("====================================================")
+
 # Create the FastAPI application.
 app = FastAPI(
     title="INDUS MIND API",

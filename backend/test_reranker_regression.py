@@ -24,8 +24,8 @@ def test_regression():
     embedding_service = EmbeddingService()
     
     # Mock embedding
-    def dummy_embed(text: str) -> list[float]:
-        return [0.1] * 384
+    def dummy_embed(text: str, is_query: bool = False) -> list[float]:
+        return [0.1] * 768
     embedding_service.generate_embedding = dummy_embed
     
     retrieval_service = RetrievalService(
@@ -72,7 +72,7 @@ def test_regression():
         }
     ]
     
-    embeddings = [[0.1] * 384 for _ in chunks]
+    embeddings = [[0.1] * 768 for _ in chunks]
     vdb.add_chunks(chunks, embeddings)
     
     class DummyLLMService(LLMService):

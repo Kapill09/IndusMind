@@ -19,6 +19,7 @@ import { ReasoningPanel } from "./reasoning-panel";
 import { EntityChips } from "./entity-chips";
 import { SuggestionChips } from "./suggestion-chips";
 import { MarkdownContent } from "@/components/assistant/markdown-content";
+import { DataMatrix, WorkflowTimeline, BulletList, SummaryCard, ArchitectureCard } from "./presentation-components";
 import { Button } from "@/components/ui/button";
 import { buildStructuredAnswerSections } from "@/lib/assistant-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,16 +96,33 @@ export const AssistantMessage = memo(function AssistantMessage({
             </div>
           </CardHeader>
           <CardContent className="space-y-4 pt-4 sm:pt-5">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {structuredSections.map((section) => (
-                <div key={section.id} className="rounded-2xl border border-border/70 bg-background/80 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{section.title}</p>
-                  <p className="mt-2 line-clamp-4 text-sm leading-6 text-foreground">{section.content}</p>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <MarkdownContent content={message.content} className="max-w-none" />
+            <div className="flex flex-col gap-4">
+              {structuredSections.map((section) => {
+                const lowerTitle = section.title.toLowerCase();
+                if (lowerTitle.includes("table") || lowerTitle.includes("matrix")) {
+                  return <DataMatrix key={section.id} title={section.title} content={section.content} />;
+                }
+                if (lowerTitle.includes("procedure") || lowerTitle.includes("workflow") || lowerTitle.includes("step")) {
+                  return <WorkflowTimeline key={section.id} title={section.title} content={section.content} />;
+                }
+                if (lowerTitle.includes("differences") || lowerTitle.includes("recommendation") || lowerTitle.includes("action") || lowerTitle.includes("points")) {
+                  return <BulletList key={section.id} title={section.title} content={section.content} />;
+                }
+                if (lowerTitle.includes("architecture") || lowerTitle.includes("layout")) {
+                  return <ArchitectureCard key={section.id} title={section.title} content={section.content} />;
+                }
+                if (lowerTitle.includes("summary") || lowerTitle.includes("overview")) {
+                  return <SummaryCard key={section.id} title={section.title} content={section.content} />;
+                }
+
+                // Fallback standard card
+                return (
+                  <div key={section.id} className="rounded-2xl border border-border/70 bg-background/80 p-5">
+                    <h3 className="mb-4 text-[13px] font-bold uppercase tracking-[0.16em] text-primary">{section.title}</h3>
+                    <MarkdownContent content={section.content} className="max-w-none" />
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

@@ -13,6 +13,7 @@ from backend.services.vectordb_service import (
     VectorDBServiceError,
 )
 from backend.services.bm25_service import BM25Service
+from backend.services.entity_extractor import EntityExtractor
 
 
 logger = logging.getLogger(__name__)
@@ -74,14 +75,16 @@ class IngestionPipeline:
         embedding_service: EmbeddingService,
         vectordb_service: VectorDBService,
         bm25_service: BM25Service | None = None,
+        entity_extractor: EntityExtractor | None = None,
     ) -> None:
         # Services are injected so the pipeline is easy to test and replace.
         self.pdf_service = pdf_service
         self.embedding_service = embedding_service
         self.vectordb_service = vectordb_service
         self.bm25_service = bm25_service or BM25Service()
+        self.entity_extractor = entity_extractor or EntityExtractor()
 
-    def ingest_document(self, pdf_path: str | Path) -> IngestionSummary:
+    def ingest_document(self, pdf_path: str | Path, access_level: str = "public") -> IngestionSummary:
         """Ingest one PDF into the industrial knowledge ChromaDB collection."""
 
         path = self._validate_pdf_path(pdf_path)
@@ -112,7 +115,7 @@ class IngestionPipeline:
             chunks = chunk_pages(
                 pages,
                 document_id=document_id,
-                metadata={"filename": path.name},
+                metadata={"filename": path.name, "access_level": access_level},
             )
             logger.info(
                 "Chunking completed: filename=%s chunks=%s latency_ms=%s",
@@ -175,6 +178,27 @@ class IngestionPipeline:
             )
         except Exception:
             logger.exception("Failed to update BM25 index for %s", path.name)
+
+        # Step 4.75: Update Entity Registry
+        try:
+            started_at = perf_counter()
+            new_entities = self.entity_extractor.build_registry(
+                document_id=document_id,
+                chunks=[
+                    {
+                        "text": c["text"],
+                        "metadata": c["metadata"]
+                    } for c in stored_chunks
+                ]
+            )
+            logger.info(
+                "Entity registry updated: filename=%s new_entities=%d latency_ms=%s",
+                path.name,
+                new_entities,
+                int((perf_counter() - started_at) * 1000),
+            )
+        except Exception:
+            logger.exception("Failed to update entity registry for %s", path.name)
 
         logger.info(
             "Ingestion completed: filename=%s pages=%s chunks=%s vectors=%s total_latency_ms=%s",

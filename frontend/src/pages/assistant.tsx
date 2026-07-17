@@ -106,6 +106,11 @@ export function AssistantPage({
         createdAt: new Date(),
       };
       setMessages((current) => [...current, userMessage]);
+      
+      console.log("======== FRONTEND ========");
+      console.log("Selected IDs:\n", JSON.stringify(selectedDocumentIds, null, 2));
+      console.log("Payload sent to /api/ask:\n", JSON.stringify({ question, documentIds: selectedDocumentIds }, null, 2));
+      
       ask({ question, documentIds: selectedDocumentIds });
     },
     [ask, isAsking, selectedDocumentIds, setMessages],

@@ -69,6 +69,10 @@ class AskRequest(BaseModel):
         default=None,
         description="Optional list of document IDs to restrict retrieval to specific sources.",
     )
+    user_role: str = Field(
+        default="public",
+        description="The access role of the user requesting the information (e.g., 'public', 'engineer', 'admin').",
+    )
 
 
 # -----------------------------
@@ -92,6 +96,7 @@ def get_rag_pipeline() -> RAGPipeline:
         rag_pipeline = RAGPipeline(
             retrieval_service=retrieval_service,
             llm_service=LLMService(),
+            embedding_service=embedding_service,
         )
 
     return rag_pipeline
@@ -151,6 +156,15 @@ async def ask_question(request: AskRequest):
         
         sanitized_document_ids = sanitize_document_ids(request.document_ids)
         q_emb = emb.generate_embedding(request.question)
+        
+        print("\n======== FASTAPI ========")
+        print(f"Raw Request Body: {request.model_dump_json()}")
+        print(f"Parsed Request Model: {request}")
+        print(f"document_ids: {request.document_ids}")
+        print("======== RAG PIPELINE ========")
+        print(f"Received document_ids: {sanitized_document_ids}")
+        print(f"Generated Chroma Filter: Pending (handled in retrieval service)\n")
+
         logger.debug(
             "Ask request accepted: question=%s document_ids=%s sanitized_document_ids=%s embedding_dim=%s",
             request.question,
@@ -163,6 +177,7 @@ async def ask_question(request: AskRequest):
                 question=request.question,
                 top_k=request.top_k,
                 document_ids=sanitized_document_ids,
+                user_role=request.user_role,
             )
         
         chunks = response["retrieval"]["results"]
@@ -192,7 +207,7 @@ async def ask_question(request: AskRequest):
     )
 
     return {
-        "success": True,
+        "success": response["success"],
         "question": response["question"],
         "answer": response["answer"],
         "model": response["model"],
@@ -202,4 +217,8 @@ async def ask_question(request: AskRequest):
         "entities": response["entities"],
         "context_chunks": response["context_chunks"],
         "retrieval_scope": response["retrieval_scope"],
+        "confidence": response["confidence"],
+        "intent": response["intent"],
+        "rejection_reason": response.get("rejection_reason"),
+        "missing_entities": response.get("missing_entities"),
     }

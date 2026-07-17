@@ -45,6 +45,8 @@ export interface AskResponse {
   entities?: Array<{ label: string; type: string }>;
   context_chunks?: number;
   retrieval_scope?: string;
+  intent?: string;
+  output_format?: string;
 }
 
 export interface ChatMessage {

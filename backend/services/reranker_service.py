@@ -156,7 +156,8 @@ class RerankerService:
                     intersection = len(chunk_tokens & existing_tokens)
                     smaller = min(len(chunk_tokens), len(existing_tokens))
                     
-                    if smaller > 0 and (intersection / smaller) > threshold:
+                    # Prevent short title pages from being wrongly flagged as duplicates
+                    if smaller > 15 and (intersection / smaller) > threshold:
                         is_dup = True
                         break
                         

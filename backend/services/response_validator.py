@@ -28,56 +28,58 @@ class ResponseValidator:
 
     def validate(self, answer: str, query_plan: QueryPlan, retrieved_chunks: list[dict]) -> ValidationResult:
         """Evaluate the answer against strict enterprise rules."""
-        
+        if not isinstance(answer, str):
+            return ValidationResult(is_valid=False, reason="Answer must be a string.")
+
+        cleaned = answer.strip()
+        if not cleaned:
+            return ValidationResult(is_valid=False, reason="Answer is empty.")
+
+        forbidden_fragments = [
+            "=== document ===",
+            "=== DOCUMENT ===",
+            "chunk-0001",
+            "[source:",
+            "based on the retrieved context",
+            "based on the retrieved document",
+            "based on retrieved context",
+            "based on retrieved document",
+            "document:",
+            "section:",
+            "chunk:",
+            "page:",
+            "retrieved context",
+        ]
+        if any(fragment.lower() in cleaned.lower() for fragment in forbidden_fragments):
+            return ValidationResult(is_valid=False, reason="Answer echoes raw context or chunk formatting.")
+
+
+        if self._looks_incomplete(cleaned):
+            return ValidationResult(is_valid=False, reason="Answer appears incomplete or truncated.")
+
+        if self._has_duplicate_paragraphs(cleaned):
+            return ValidationResult(is_valid=False, reason="Answer repeats duplicate paragraphs.")
+
         # Fast-fail for fallback answers
         if "I couldn't find this information" in answer or "available evidence is limited" in answer:
             return ValidationResult(is_valid=True, reason="")
 
         entities = ", ".join(e.normalized for e in query_plan.entities) or "None explicitly detected"
-        
-        prompt = f"""You are an Enterprise AI Output Validator. Your job is to strictly evaluate a generated RAG answer.
 
-USER QUERY:
-{query_plan.original_query}
+        # If we reach here, the answer passed all deterministic checks.
+        return ValidationResult(
+            is_valid=True,
+            reason=""
+        )
 
-INTENT:
-{query_plan.intent.value}
+    @staticmethod
+    def _looks_incomplete(text: str) -> bool:
+        lowered = text.rstrip().lower()
+        if lowered.endswith(("...", "etc", "and", "or")):
+            return True
+        return lowered.endswith(("the", "this", "because", "due")) and len(text.split()) < 40
 
-DETECTED ENTITIES TO COVER:
-{entities}
-
-GENERATED ANSWER:
-{answer}
-
-Evaluate the generated answer against these 5 strict constraints:
-1. Were all requested entities answered? (If the query asks about X and Y, are both X and Y discussed?)
-2. Was every compared item included? (For comparisons, did it actually compare all subjects?)
-3. Are citations present? (Does the answer include [source: ...] tags?)
-4. Is the answer grounded? (Does it sound like it's based on retrieved documents?)
-5. Is there unsupported reasoning? (Does it make wild claims or use 'I think' or outside knowledge?)
-
-Output a JSON object with:
-- is_valid: true if ALL constraints are met, false if ANY fail.
-- reason: If false, explicitly state which constraint failed and exactly what the LLM needs to do to fix it (e.g. 'You forgot to discuss entity Y. Add a section for it.'). If true, leave empty.
-"""
-
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ValidationResult,
-                    temperature=0.0,
-                ),
-            )
-            
-            if response.text:
-                import json
-                data = json.loads(response.text)
-                return ValidationResult(**data)
-            
-            return ValidationResult(is_valid=True, reason="")
-        except Exception as exc:
-            logger.warning("Response validation failed (LLM error): %s. Bypassing validation.", exc)
-            return ValidationResult(is_valid=True, reason="")
+    @staticmethod
+    def _has_duplicate_paragraphs(text: str) -> bool:
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        return len(paragraphs) > 1 and len(set(paragraphs)) != len(paragraphs)

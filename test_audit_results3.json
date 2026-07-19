@@ -1,0 +1,18 @@
+[
+  {
+    "query": "What is D2DAP?",
+    "answer": "# D2DAP: Drone-to-Drone Authentication Protocol\n\n## Overview\nD2DAP, which stands for \"Provably Secure and Efficient Drone-to-Drone Authentication Protocol,\" is a robust and efficient authentication protocol designed for"
+  },
+  {
+    "query": "Full form of D2DAP",
+    "answer": "Source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf Page: 10 cryptographic operations are implemented using a Type-A elliptic curve defined by y2 \u2261(x3 + x) (mod q), with an embedding degree of 2 over a prime field Zq. The group Gq has an order of q = p \u00d7 h \u22121, where q \u22613 (mod 4), p is a Solinas prime of the form p = 2exp2 + sign1 \u00d7 2exp1 + sign0, h is the smallest constant (the cofactor), and p is the ord... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0040, page=10]"
+  },
+  {
+    "query": "Compare D2DAP and MAKA",
+    "answer": "Based on the retrieved document context, Fig. 4: AVISPA-based simulation for D2DAP protocol is executed via a secure channel encrypted using symmetric key cryptography. The MAKA phase is triggered by Di to agree on a session key SK with Dj. The channel characteristics are defined by the Dolev-Yao threat model (insecure channel). The secrecy of all identities and private keys of the drones constitutes the secrecy goals of the protocol model. The authen- tication goal of the model is to ensure mutual authentication be... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0039, page=10]"
+  },
+  {
+    "query": "What is Problem Statement 8?",
+    "answer": "Based on the retrieved document context, Service (DoS) and elevation-of-privilege attacks according to the STRIDE-based threat model. Table I shows the summary of the state-of-the-art protocols. TABLE I: Summary of state-of-the-art protocols Ref. Methodology Contributions Limitations [3] ECC, digital cer- tificate Certificate based ac- cess control for D2D and D2CS communica- tion. Anonymity and unlinkabilty problem. [8] RSA, digital cer- tificate Certificate based au- thentication, drone ad- dition and revocation.... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0007, page=2]"
+  }
+]

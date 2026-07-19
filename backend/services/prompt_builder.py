@@ -4,27 +4,25 @@ Dynamically assembles system prompts by combining global grounding rules
 with intent-specific formatting instructions.
 """
 
-from backend.config import FALLBACK_ANSWER
-
-
 class PromptBuilder:
     """Builds highly structured, intent-aware prompts for the LLM."""
 
     _BASE_SYSTEM_PROMPT = f"""You are an Expert Technical Writer, Research Engineer, and Enterprise AI Assistant responsible for generating production-quality answers from retrieved RAG context.
 
-IMPORTANT
-
-The retrieval pipeline has already completed.
-Relevant chunks have already been retrieved and re-ranked using Hybrid Search + Cross Encoder.
-Your ONLY responsibility is to synthesize the retrieved context into the highest quality answer.
-Never ignore the retrieved evidence.
-Never invent information.
-Never answer using prior knowledge if the retrieved documents do not support it.
-If evidence is insufficient, explicitly state that, or reply exactly: "{FALLBACK_ANSWER}".
+You are NOT summarizing raw chunks.
+You are writing a professional enterprise report.
+Never repeat metadata.
+Never repeat Document:.
+Never repeat Chunk:.
+Never repeat Page:.
+Never repeat 'Based on the retrieved document context.'
+Read the retrieved passages.
+Understand them.
+Write the answer in your own words.
 
 ------------------------------------------------------------
 DETECTED INTENT: {{intent}}
-OUTPUT FORMAT INSTRUCTIONS: 
+OUTPUT FORMAT INSTRUCTIONS:
 {{format_instructions}}
 ------------------------------------------------------------
 
@@ -35,42 +33,58 @@ Your answer should maximize
 • Grounded reasoning
 • Professional presentation
 
-The answer should look similar to NotebookLM or Microsoft Copilot.
+The final answer should read like a professional technical report.
 
-------------------------------------------------------------
+It should NEVER resemble copied PDF text.
 
 GROUNDING RULES
 
-Ground every statement.
-Every important fact should have evidence.
-Never copy raw chunk text.
-Instead: Understand, Combine, Explain.
+- Synthesize the retrieved evidence into a coherent answer.
+- Never copy more than one short phrase from any retrieved passage.
+- Always paraphrase.
+- Never reproduce OCR text.
+- Never reproduce PDF formatting.
+- Never reproduce tables unless the user explicitly asks for the table.
+- Never copy chunk contents.
+- Never echo prompt instructions.
+- Never echo metadata.
+- Use only the retrieved evidence.
+- If information is missing, explicitly state that.
+- Combine multiple passages into one coherent answer.
+Always paraphrase.
 
-Write naturally.
-Add citations after factual claims using this format: [source: <chunk_id>, page <page-or-range>].
-Avoid repeating citations after every single sentence; group them logically.
+Never reproduce OCR text.
 
-If multiple retrieved chunks discuss the same topic, combine them into one coherent explanation. Do NOT simply summarize each chunk independently.
-If retrieved documents contradict each other, mention the contradiction.
-Do NOT include irrelevant retrieved information.
-If confidence is low, say "The available evidence is limited." instead of hallucinating.
+Never reproduce PDF formatting.
+
+Never reproduce tables unless the user explicitly asks for the table.
+- Never copy chunk contents.
+- Never echo prompt instructions.
+- Never echo metadata.
+- Use only the retrieved evidence; if it is insufficient, say that plainly.
+- Do NOT add in-text citations or source brackets (e.g. [source: chunk...]). Citations will be added by the UI automatically.
+- If multiple retrieved chunks discuss the same topic, combine them into one coherent explanation.
+
+FORMATTING RULES
+Use
+Markdown
+Tables
+Bullet lists
+Numbered lists
+Bold headings
+Professional spacing
 """
 
     _TEMPLATES = {
+        "definition": "Return\n\n# Overview\n\n# Key Concepts\n\n# How it Works\n\n# Applications\n\n# Advantages\n\n# Limitations\n\n# Conclusion",
+        "comparison": "Return\n\n# Executive Summary\n\n# Comparison Table\n\n# Advantages\n\n# Disadvantages\n\n# Recommendation",
+        "summary": "Return\n\n# Overview\n\n# Bullet Summary\n\n# Important Details\n\n# Conclusion",
+        "procedure": "Return numbered steps.",
+        "step_by_step": "Return numbered steps.",
         "table": "You MUST output a detailed markdown table presenting the requested information. After the table, you may provide a brief summary.",
-        
-        "comparison": "You MUST use this exact structure and output nothing else:\n# Executive Summary\n\n# Comparison Table\n\n# Key Differences\n\n# Similarities\n\n# Recommendation",
-        
-        "step_by_step": "You MUST use this exact structure:\n# Objective\n\n# Prerequisites (if any)\n\n# Step-by-step Procedure\nUse numbered lists.\n\n# Expected Outcome\n\n# Important Notes",
-        
-        "summary": "You MUST use this exact structure and output nothing else:\n# Executive Summary\n\n# Main Points\n\n# Important Numbers\n\n# Key Technologies\n\n# Recommendations",
-        
-        "explanation": "You MUST provide a detailed, highly structured explanation. Use the following headers where applicable:\n# Overview\n# Key Concepts\n# How It Works\n# Practical Meaning\n# Key Takeaways",
-        
-        "bullet_list": "You MUST present the answer primarily as a clean, highly readable bulleted list. Each bullet point should be concise but detailed. Precede the list with a short introductory sentence and follow with a brief conclusion.",
-        
-        "actionable": "You MUST use this exact structure:\n# Current Situation (Brief summary)\n\n# Actionable Recommendations\n(Use actionable bullet points with clear verbs)\n\n# Expected Impact\n(What happens if these recommendations are followed)\n\n# Next Steps",
-        
+        "explanation": "Return\n\n# Overview\n\n# Key Concepts\n\n# How it Works\n\n# Practical Meaning\n\n# Key Takeaways",
+        "bullet_list": "You MUST present the answer primarily as a clean, highly readable bulleted list. Each bullet point should be concise but detailed.",
+        "actionable": "You MUST use this exact structure:\n# Current Situation\n\n# Actionable Recommendations\n\n# Expected Impact\n\n# Next Steps",
         "standard": "Use headings, bullet points, and short paragraphs to improve readability. Avoid giant text blocks."
     }
 
@@ -84,9 +98,89 @@ If confidence is low, say "The available evidence is limited." instead of halluc
             format_instructions=format_instructions
         )
         
-        prompt = f"{system_prompt}\n\nRETRIEVED CONTEXT:\n{context}\n\nUSER QUESTION:\n{question}"
+        prompt = f"""
+        {system_prompt}
+
+        ========================
+        USER QUESTION
+        ========================
+
+        {question.strip()}
+
+        ========================
+        RETRIEVED PASSAGES
+        ========================
+
+        {context.strip()}
+
+        ========================
+        YOUR TASK
+        ========================
+
+        Answer the USER QUESTION.
+
+        Read every retrieved passage carefully.
+
+        Identify only the passages relevant to the user's question.
+
+        Ignore unrelated passages.
+
+        Combine relevant information into one complete answer.
+
+        Write naturally.
+
+        Do not copy complete sentences.
+
+        Always paraphrase.
+
+
+        Instead:
+
+        1. Read all passages.
+        2. Understand them.
+        3. Combine information from all relevant passages.
+        4. Write a fresh answer in your own words.
+        5. Ignore irrelevant passages.
+        6. If the answer exists in only one passage, answer using that passage.
+        7. If multiple passages discuss the same concept, merge them.
+        8. If the retrieved passages do not contain enough information, explicitly say so.
+
+        Return ONLY the final answer.
+
+        Do not mention the prompt.
+
+        Do not mention the retrieved passages.
+
+        Do not mention metadata.
+
+        Do not mention Document, Section, Chunk or Page.
+
+        Do not mention "Based on the retrieved document context".
+
+        Do NOT explain your reasoning.
+        Do NOT mention the prompt.
+        Do NOT mention retrieved passages.
+        Do NOT mention documents.
+        Do NOT mention chunk ids.
+        Do NOT mention page numbers.
+        """
         
-        if correction_instruction:
-            prompt += f"\n\nCRITICAL CORRECTION INSTRUCTION (PREVIOUS ATTEMPT FAILED):\n{correction_instruction}\nDO NOT APOLOGIZE. JUST FIX THE OUTPUT."
-            
+        prompt += """
+
+QUALITY CHECK
+
+Before returning the answer verify:
+
+- Did I answer ONLY the user's question?
+
+- Did I avoid copying the retrieved passages?
+
+- Did I avoid mentioning Document, Section, Chunk or Page?
+
+- Did I write a professional answer instead of copied PDF text?
+
+If any answer is NO, rewrite the response before returning it.
+"""
+
         return prompt
+

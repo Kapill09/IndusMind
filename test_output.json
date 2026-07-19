@@ -1,0 +1,357 @@
+{
+  "success": true,
+  "question": "What is D2DAP",
+  "answer": "# D2DAP: Drone-to-Drone Authentication Protocol\n\n## Overview\nD2DAP, which stands for \"Provably Secure and Efficient Drone-to-Drone Authentication Protocol,\" is a robust and efficient authentication protocol designed for",
+  "model": "gemini-2.5-flash",
+  "retrieval_time_ms": 63,
+  "total_results": 17,
+  "sources": [
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0001",
+      "text": "=== Document: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf ===\n\nD2DAP: Provably Secure and Efficient\n\n1\nD2DAP: Provably Secure and Efficient\nDrone-to-Drone Authentication Protocol Using\nThreshold Cryptography and PUF\nKrittibas Parai , Prasanta Kumar Roy , Pankaj Kumar , SK Hafizul Islam\nAbstract\u2014Drone-to-Drone (D2D) communication has significant\napplications in many real-time monitoring and surveillance\nsystems. However, comm",
+      "page_start": 1,
+      "page_end": 1,
+      "score": 7.7983,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "D2DAP: Provably Secure and Efficient",
+        "title": "D2DAP: Provably Secure and Efficient",
+        "problem_statement_number": "1",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 1,
+        "parent_heading": "D2DAP: Provably Secure and Efficient",
+        "chunk_type": "body",
+        "page_start": 1,
+        "page_end": 1,
+        "intent": "definition",
+        "reranker_score": 7.7983
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0002",
+      "text": "and improves system efficiency during the D2D authentication\nprocess. The security and privacy properties of D2DAP are\nvalidated using formal, informal, and automated tool-based\nsecurity analyses. Furthermore, its real-time performance is\nevaluated on a hardware-based model across various security\nlevels, demonstrating remarkable results.\nIndex Terms\u2014Internet-of-Drones, Drone-to-Drone communica-\ntion, Security, Privacy, Physical security.\nI. INTRODUCTION\nFlying Ad-hoc Network (FANET), a subset o",
+      "page_start": 1,
+      "page_end": 1,
+      "score": 4.7363,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "and improves system efficiency during the D2D authentication",
+        "title": "and improves system efficiency during the D2D authentication",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 2,
+        "parent_heading": "and improves system efficiency during the D2D authentication",
+        "chunk_type": "body",
+        "page_start": 1,
+        "page_end": 1,
+        "intent": "definition",
+        "reranker_score": 4.7363
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0003",
+      "text": "(E-mail: krittibas.sit@gmail.com, prasanta201284@gmail.com)\nP. Kumar is with Department of Computer Science and Engineering Maulana\nAzad National Institute of Technology, Bhopal 462003, Madhya Pradesh, India.\n(E-mail: pankajkumar16it@gmail.com)\nS. H. Islam is with Department of Computer Science and Engineering,\nIndian Institute of Information Technology Kalyani, West Bengal 741235,\nIndia. (E-mail: hafi786@gmail.com)\nAccess Point\nCS\nFig. 1: IoD system architecture\nextension of FANET, where a set ",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "chunk_index": 3,
+        "page_start": 1,
+        "heading": "(E-mail: krittibas.sit@gmail.com, prasanta201284@gmail.com)",
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0003",
+        "figure_number": "1",
+        "page_end": 1,
+        "title": "(E-mail: krittibas.sit@gmail.com, prasanta201284@gmail.com)",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0008",
+      "text": "With the emergence of sophisticated technologies and new\ntypes of attacks, existing security mechanisms for the IoD\nenvironment may fail to ensure complete security and privacy,\nthus requiring significant enhancements to bridge the gap. In\nthis section, four crucial security and design requirements are\nidentified for D2D authentication protocols.\n1) System-Specific Threat Model: The security of existing\nprotocols is primarily focused on attack scenarios defined\nby traditional threat models, such",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "title": "With the emergence of sophisticated technologies and new",
+        "heading": "With the emergence of sophisticated technologies and new",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "page_start": 2,
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "chunk_index": 8,
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0008",
+        "page_end": 2,
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0009",
+      "text": "an efficient D2D authentication protocol.\n4) Key Storage and Security: In D2D communication, it is\ndesirable for any specific drone to be able to communicate\nwith other drones. The traditional solution is twofold. For\nn drones in the network, a shared secret key must be\nmaintained between each pair of drones, resulting in n(n\u2212\n1)/2 keys in total, with each drone storing (n \u22121) keys,\nwhich significantly increases its key storage overhead. In\nthe second approach, a group key is maintained for all\n",
+      "page_start": 2,
+      "page_end": 2,
+      "score": 5.4064,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "an efficient D2D authentication protocol.",
+        "title": "an efficient D2D authentication protocol.",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 9,
+        "parent_heading": "an efficient D2D authentication protocol.",
+        "chunk_type": "body",
+        "page_start": 2,
+        "page_end": 2,
+        "intent": "definition",
+        "reranker_score": 5.4064
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0010",
+      "text": "for D2D mutual authentication. Furthermore, D2D com-\nmunication does not rely on any intermediate trusted third\nparty for authentication or access control. Drones/nodes\ncan securely communicate via a direct D2D link without\n1https://www.microsoft.com/en-in/download/details.aspx?id=49168\nThis article has been accepted for publication in IEEE Transactions on Vehicular Technology. This is the author's version which has not been fully edited and \ncontent may change prior to final publication. Citati",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "title": "for D2D mutual authentication. Furthermore, D2D com",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "page_start": 2,
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0010",
+        "chunk_index": 10,
+        "page_end": 3,
+        "heading": "for D2D mutual authentication. Furthermore, D2D com",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0011",
+      "text": "secret keys. Due to manufacturing variability, PUFs ensure\nthat no two devices generate the same key, even if they\nare produced by the same manufacturer with identical\nhardware configurations.\n4) Threshold cryptography is used in the proposed D2DAP\nprotocol to ensure security against node-compromise\nattacks [19], where a single key is used to authenticate\nall drones in the network, but each individual drone\nmaintains a share of the secret key such that the key can\nbe reconstructed only when mult",
+      "page_start": 3,
+      "page_end": 3,
+      "score": 4.0051,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "secret keys. Due to manufacturing variability, PUFs ensure",
+        "title": "secret keys. Due to manufacturing variability, PUFs ensure",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 11,
+        "parent_heading": "secret keys. Due to manufacturing variability, PUFs ensure",
+        "chunk_type": "body",
+        "page_start": 3,
+        "page_end": 3,
+        "intent": "definition",
+        "reranker_score": 4.0051
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0012",
+      "text": "Elevation of privilege). The MTMT-based system model for\nD2D communication is shown in Fig. 2. According to [2], we\nhave focused on a decentralized UAV-to-UAV ad-hoc network\ncommunication architecture for homogeneous drone nodes. The\nsystem model specifies communication between two drones,\nDi and Dj, defined as Drone-to-Drone (D2D) communication.\nBeyond traditional models, the proposed model shows that\nCS is not involved in D2D communication. Di and Dj are\nseparated by their own network boundari",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "page_start": 3,
+        "title": "Elevation of privilege). The MTMT-based system model for",
+        "figure_number": "2",
+        "page_end": 3,
+        "heading": "Elevation of privilege). The MTMT-based system model for",
+        "chunk_index": 12,
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0012",
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0028",
+      "text": "physical level and algorithmic level [30]. Security at the\nphysical level can be accomplished by using a PUF or\nby storing data in tamper-proof memory. Algorithmic\nlevel security can be achieved by implementing random\ninputs and constant-time cryptographic algorithms. In\nD2DAP, physical level security is achieved by integrating\na PUF module with each drone. Further, tamper-proof\nmemory may be integrated with each drone to mask\nstored information. In the proposed D2DAP protocol, the\npair (Cik, bi",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "title": "physical level and algorithmic level [30]. Security at the",
+        "heading": "physical level and algorithmic level [30]. Security at the",
+        "page_start": 7,
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0028",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 28,
+        "page_end": 7,
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0029",
+      "text": "The Real-or-Random (RoR) model-based formal security\nanalysis is widely used to evaluate the advantage of an adaptive\nPPT adversary A within a polynomial time bound when\nperforming passive or active attacks. In this model, A is allowed\nto execute a polynomial number of queries defined below. The\nprobability of success of A is determined by the cumulative\nadvantage over all queries. The formal model for analyzing\nthe security of the proposed D2DAP protocol is defined as\nfollows:\n1) Assumptions: T",
+      "page_start": 7,
+      "page_end": 7,
+      "score": 4.2432,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "The Real-or-Random (RoR) model-based formal security",
+        "title": "The Real-or-Random (RoR) model-based formal security",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 29,
+        "parent_heading": "The Real-or-Random (RoR) model-based formal security",
+        "chunk_type": "body",
+        "page_start": 7,
+        "page_end": 7,
+        "intent": "definition",
+        "reranker_score": 4.2432
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0030",
+      "text": "channel between Di and Dj.\nThis article has been accepted for publication in IEEE Transactions on Vehicular Technology. This is the author's version which has not been fully edited and \ncontent may change prior to final publication. Citation information: DOI 10.1109/TVT.2026.3674144\n\u00a9 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,\nbut republication/redistribution requires IEEE ",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0030",
+        "page_start": 7,
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "page_end": 8,
+        "chunk_index": 30,
+        "title": "channel between Di and Dj.",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "heading": "channel between Di and Dj.",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0038",
+      "text": "[25]. We have modeled the proposed D2DAP protocol using\nthe HLPSL language supported by AVISPA tool. Table V\nsummarizes the system specification and other components\nused for modeling D2DAP in AVISPA. The registration phase\nThis article has been accepted for publication in IEEE Transactions on Vehicular Technology. This is the author's version which has not been fully edited and \ncontent may change prior to final publication. Citation information: DOI 10.1109/TVT.2026.3674144\n\u00a9 2026 IEEE. All ri",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "problem_statement_number": "10",
+        "heading": "TABLE V: HLPSL specifications for D2DAP protocol",
+        "page_end": 10,
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 38,
+        "page_start": 9,
+        "title": "TABLE V: HLPSL specifications for D2DAP protocol",
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0038",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0039",
+      "text": "Fig. 4: AVISPA-based simulation for D2DAP protocol\nis executed via a secure channel encrypted using symmetric key\ncryptography. The MAKA phase is triggered by Di to agree\non a session key SK with Dj. The channel characteristics\nare defined by the Dolev-Yao threat model (insecure channel).\nThe secrecy of all identities and private keys of the drones\nconstitutes the secrecy goals of the protocol model. The authen-\ntication goal of the model is to ensure mutual authentication\nbetween Di and Dj. The",
+      "page_start": 10,
+      "page_end": 10,
+      "score": 4.2822,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "Fig. 4: AVISPA-based simulation for D2DAP protocol",
+        "title": "Fig. 4: AVISPA-based simulation for D2DAP protocol",
+        "figure_number": "4",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 39,
+        "parent_heading": "Fig. 4: AVISPA-based simulation for D2DAP protocol",
+        "chunk_type": "body",
+        "page_start": 10,
+        "page_end": 10,
+        "intent": "definition",
+        "reranker_score": 4.2822
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0040",
+      "text": "cryptographic operations are implemented using a Type-A\nelliptic curve defined by y2 \u2261(x3 + x) (mod q), with an\nembedding degree of 2 over a prime field Zq. The group Gq\nhas an order of q = p \u00d7 h \u22121, where q \u22613 (mod 4), p is a\nSolinas prime of the form p = 2exp2 + sign1 \u00d7 2exp1 + sign0,\nh is the smallest constant (the cofactor), and p is the order\nof Gp. Table VI summarizes the three distinct security levels\nalong with the corresponding parameter sizes [32]. AES in\nCTR mode is used for both encr",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "page_start": 10,
+        "chunk_index": 40,
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0040",
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "figure_number": "5",
+        "title": "cryptographic operations are implemented using a Type-A",
+        "page_end": 10,
+        "heading": "cryptographic operations are implemented using a Type-A",
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0044",
+      "text": "Total\n128\n117396200\n\u2212\n117396200\n234792400\n[26]\n192\n239079347\n\u2212\n239079347\n478158694\n256\n496579901\n\u2212\n496579901\n993159802\n128\n88943325\n\u2212\n88943325\n177886650\n[27]\n192\n354069762\n\u2212\n354069762\n708139524\n256\n1122854382\n\u2212\n1122854382\n2245708764\n128\n119599021\n\u2212\n119599021\n239198042\n[3]\n192\n189196415\n\u2212\n189196415\n378392830\n256\n271316668\n\u2212\n271316668\n542633336\n128\n50962050\n4708102\n50962050\n101924100\n[8]\n192\n184680724\n13608489\n184680724\n369361448\n256\n570011664\n5398539\n570011664\n1140023328\n128\n120396955\n\u2212\n120396955",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "heading": "Total",
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0044",
+        "title": "Total",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "page_end": 11,
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "figure_number": "6",
+        "page_start": 11,
+        "chunk_index": 44,
+        "is_neighbor": true
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0045",
+      "text": "CPU Frequency\n\u00d7 1000 (mJ) (10)\nThe overall energy consumption is evaluated and presented in\nTable X and Fig. 7. It is observed that the proposed D2DAP\nprotocol has the lowest energy consumption at the 192-bit and\n256-bit security levels. From Table X and Fig. 7, it is observed\nthat the energy consumption of the proposed D2DAP protocol\nis higher than the protocols in [8], [27] for 128-bit security,\nand the reason is that the proposed D2DAP protocol uses more\ncryptographic operations to enhance th",
+      "page_start": 11,
+      "page_end": 12,
+      "score": 4.4542,
+      "metadata": {
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "heading": "TABLE X: Energy consumption at different security level",
+        "title": "TABLE X: Energy consumption at different security level",
+        "figure_number": "7",
+        "problem_statement_number": "12",
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "chunk_index": 45,
+        "parent_heading": "CPU Frequency",
+        "chunk_type": "body",
+        "page_start": 11,
+        "page_end": 12,
+        "intent": "definition",
+        "reranker_score": 4.4542
+      }
+    },
+    {
+      "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0046",
+      "text": "Security level\nDi\nCS\nDj\nTotal\n128\n1.006253143\n-\n1.006253143\n2.012506286\n[26]\n192\n2.049251546\n2.049251546\n4.098503091\n256\n4.256399151\n4.256399151\n8.512798303\n128\n0.762371357\n-\n0.762371357\n1.524742714\n[27]\n192\n3.034883674\n-\n3.034883674\n6.069767349\n256\n9.624466131\n-\n9.624466131\n19.24893226\n128\n1.025134466\n-\n1.025134466\n2.050268931\n[3]\n192\n1.621683557\n-\n1.621683557\n3.243367114\n256\n2.32557144\n-\n2.32557144\n4.65114288\n128\n0.436817571\n0.257165235\n0.436817571\n1.130800378\n[8]\n192\n1.582977634\n0.743320828\n1",
+      "page_start": null,
+      "page_end": null,
+      "score": -2.0,
+      "metadata": {
+        "page_start": 12,
+        "filename": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf",
+        "problem_statement_number": "10",
+        "chunk_index": 46,
+        "document_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF",
+        "heading": "Security level",
+        "page_end": 12,
+        "figure_number": "7",
+        "title": "Security level",
+        "chunk_id": "D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0046",
+        "is_neighbor": true
+      }
+    }
+  ],
+  "entities": [
+    {
+      "label": "Ieee",
+      "type": "Standards"
+    },
+    {
+      "label": "Ai",
+      "type": "Technologies"
+    }
+  ],
+  "context_chunks": 17,
+  "retrieval_scope": "Entire Knowledge Base",
+  "confidence": 82,
+  "intent": "definition",
+  "rejection_reason": null,
+  "missing_entities": []
+}

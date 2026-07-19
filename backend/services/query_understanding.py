@@ -49,6 +49,8 @@ class QueryIntent(str, Enum):
     RECOMMENDATION = "recommendation"
     TROUBLESHOOTING = "troubleshooting"
     STRUCTURAL_LOOKUP = "structural_lookup"
+    NAVIGATION = "navigation"
+    ANALYTICAL = "analytical"
 
 
 class RetrievalStrategy(str, Enum):
@@ -108,7 +110,13 @@ class IntentClassifier:
     """Classifies user query intent using rules and an optional LLM fallback."""
     
     def __init__(self) -> None:
-        self._COMPARISON_RE = re.compile(r"\b(compare|comparison|versus|vs\.?|differ|difference|between)\b", re.IGNORECASE)
+        self._COMPARISON_RE = re.compile(
+            r"\b(compare|comparison|versus|vs\.?|difference|contrast)\b"
+            r"|\bbetter\s+than\b"
+            r"|\badvantages?\s+over\b"
+            r"|\bdisadvantages?\s+compared\s+to\b",
+            re.IGNORECASE,
+        )
         self._PROCEDURE_RE = re.compile(r"\b(how to|steps|procedure|method|instructions)\b", re.IGNORECASE)
         self._STEP_GUIDE_RE = re.compile(r"\b(step-by-step|step by step|guide)\b", re.IGNORECASE)
         self._TABLE_RE = re.compile(r"\b(table|tabular|matrix|grid)\b", re.IGNORECASE)
@@ -120,30 +128,44 @@ class IntentClassifier:
         self._RECOMMENDATION_RE = re.compile(r"\b(recommend|recommendation|suggest|best practice|advice)\b", re.IGNORECASE)
         self._PROBLEM_SOLUTION_RE = re.compile(r"\b(solution|solve|resolve|mitigate)\b", re.IGNORECASE)
         self._COMMON_CONCEPTS_RE = re.compile(r"\b(common|shared|similarities|both)\b", re.IGNORECASE)
-        self._DEFINITION_RE = re.compile(r"^(what is|what are|define|meaning of)\b", re.IGNORECASE)
+        self._DEFINITION_RE = re.compile(r"^(what is|what are|who is|who are|who proposed|define|meaning of)\b", re.IGNORECASE)
+        self._EXPLANATION_RE = re.compile(r"^(explain|describe|tell me about)\b", re.IGNORECASE)
+        self._NAVIGATION_RE = re.compile(r"^(open|show|go to|navigate to|find|locate)\b", re.IGNORECASE)
+        self._ANALYTICAL_RE = re.compile(r"\b(analyze|analyse|analysis|evaluate|assess|impact|implications|challenges)\b", re.IGNORECASE)
         
         api_key = os.getenv("GEMINI_API_KEY")
         self.llm_client = genai.Client(api_key=api_key) if api_key else None
         
     def classify(self, query: str, entities: list[ExtractedEntity], doc_sources: set[str]) -> tuple[QueryIntent, float]:
         structural_types = {EntityType.PROBLEM_STATEMENT, EntityType.PAGE, EntityType.SECTION, EntityType.CHAPTER, EntityType.FIGURE, EntityType.TABLE}
+        has_comparison = bool(self._COMPARISON_RE.search(query))
+
+        if has_comparison:
+            is_cross_doc = len(doc_sources) > 1
+            if is_cross_doc:
+                return QueryIntent.CROSS_DOCUMENT_COMPARISON, 0.95
+            return QueryIntent.COMPARISON, 0.95
+
+        # Check for structural entities (like Problem Statement 8) before generic definitions
         if any(e.entity_type in structural_types for e in entities):
             if self._PROBLEM_SOLUTION_RE.search(query):
                 return QueryIntent.PROBLEM_SOLUTION_MAPPING, 0.9
             return QueryIntent.STRUCTURAL_LOOKUP, 0.95
 
-        is_cross_doc = len(doc_sources) > 1
+        if self._DEFINITION_RE.search(query):
+            return QueryIntent.DEFINITION, 0.97
+
+        if self._EXPLANATION_RE.search(query):
+            return QueryIntent.EXPLANATION, 0.92
+
+        if self._SUMMARIZATION_RE.search(query):
+            return QueryIntent.SUMMARIZATION, 0.9
+
+        if self._NAVIGATION_RE.search(query):
+            return QueryIntent.NAVIGATION, 0.9
 
         if self._TABLE_RE.search(query):
             return QueryIntent.TABLE_REQUEST, 0.9
-
-        has_comparison = bool(self._COMPARISON_RE.search(query))
-        comparison_entities = [e for e in entities if e.entity_type not in structural_types and e.confidence >= 0.5]
-        
-        if has_comparison or len(comparison_entities) >= 2:
-            if is_cross_doc:
-                return QueryIntent.CROSS_DOCUMENT_COMPARISON, 0.9
-            return QueryIntent.COMPARISON, 0.85
 
         if self._STEP_GUIDE_RE.search(query):
             return QueryIntent.STEP_BY_STEP_GUIDE, 0.9
@@ -168,12 +190,9 @@ class IntentClassifier:
             
         if self._COMMON_CONCEPTS_RE.search(query):
             return QueryIntent.COMMON_CONCEPTS, 0.8
-            
-        if self._SUMMARIZATION_RE.search(query):
-            return QueryIntent.SUMMARIZATION, 0.85
 
-        if self._DEFINITION_RE.search(query):
-            return QueryIntent.DEFINITION, 0.8
+        if self._ANALYTICAL_RE.search(query):
+            return QueryIntent.ANALYTICAL, 0.85
             
         if self._PROBLEM_SOLUTION_RE.search(query):
             return QueryIntent.PROBLEM_SOLUTION_MAPPING, 0.8
@@ -187,9 +206,17 @@ class IntentClassifier:
         
     def _llm_fallback(self, query: str) -> tuple[QueryIntent | None, float]:
         try:
-            prompt = f"Classify the following query into exactly one of these intents: Definition, Explanation, Summarization, Comparison, Advantages, Disadvantages, Workflow, Procedure, Table Request, Step-by-step Guide, Cross-document Comparison, Common Concepts, Problem-Solution Mapping, Recommendation, Troubleshooting.\n\nQuery: '{query}'\n\nReturn ONLY the exact intent name."
+            prompt = f"""Classify the following query into exactly one of these intents: Definition, Explanation, Summarization, Comparison, Advantages, Disadvantages, Workflow, Procedure, Table Request, Step-by-step Guide, Cross-document Comparison, Common Concepts, Problem-Solution Mapping, Recommendation, Troubleshooting, Navigation, Analytical.
+
+Rules:
+- "What is X?", "Who is X?", "Who proposed X?", and "Define X" are Definition unless explicit comparison language is present.
+- Only classify Comparison when explicit comparison words appear: compare, difference, versus, vs, better than, advantages over, disadvantages compared to, contrast.
+
+Query: '{query}'
+
+Return ONLY the exact intent name."""
             response = self.llm_client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=10)
             )
@@ -216,7 +243,7 @@ class QueryRouter:
         if intent == QueryIntent.STRUCTURAL_LOOKUP:
             strategy = RetrievalStrategy.STRUCTURED
             
-        elif intent in (QueryIntent.COMPARISON, QueryIntent.CROSS_DOCUMENT_COMPARISON, QueryIntent.ADVANTAGES, QueryIntent.DISADVANTAGES, QueryIntent.COMMON_CONCEPTS):
+        elif intent in (QueryIntent.COMPARISON, QueryIntent.CROSS_DOCUMENT_COMPARISON):
             strategy = RetrievalStrategy.MULTI_QUERY
             requires_comparison = True
             num_retrievals = 8
@@ -311,15 +338,16 @@ class QueryUnderstandingEngine:
             requires_table=req_table
         )
         
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 2 - Query Understanding")
-        print(f"[RAG DEBUG] Expanded Query: {[sq.text for sq in search_queries]}")
-        print(f"[RAG DEBUG] Intent: {intent.value}")
-        print(f"[RAG DEBUG] Entities: {[e.text for e in entities]}")
-        print(f"[RAG DEBUG] Comparison Targets: {[e.text for e in plan.comparison_entities]}")
-        print(f"[RAG DEBUG] Target Document IDs: {document_selection.selected_ids}")
-        print(f"[RAG DEBUG] Need Comparison: {'Yes' if req_comparison else 'No'}")
-        print("[RAG DEBUG] ====================================================\n")
+        print("\n========== QUERY UNDERSTANDING ==========")
+        print(f"Original Query:\n{clean_query}\n")
+        print(f"Intent:\n{intent.value.title()}\n")
+        print(f"Confidence:\n{confidence:.2f}\n")
+        print(f"Entities:\n{[e.text for e in entities]}\n")
+        print(f"Need Comparison:\n{req_comparison}\n")
+        print("Expanded Queries:\n")
+        for index, search_query in enumerate(search_queries, start=1):
+            print(f"{index}.\n{search_query.text}\n")
+        print("========================================\n")
 
         logger.info(
             "QueryPlan built: intent=%s conf=%.2f strategy=%s docs=%s top_k=%d format=%s",

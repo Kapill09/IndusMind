@@ -86,7 +86,7 @@ class EntityExtractor:
         (
             EntityType.PROBLEM_STATEMENT,
             re.compile(
-                r"\bproblem\s+(?:(?:statement|stmt)\s*)?(?:number|no\.?|#)?\s*([A-Za-z]?\d+[A-Za-z]?)\b",
+                r"\bproblem\s+(?:(?:statement|stmt|statemtn|statment)\s*)?(?:number|no\.?|#)?\s*([A-Za-z]?\d+[A-Za-z]?)\b",
                 re.IGNORECASE,
             ),
         ),
@@ -142,6 +142,8 @@ class EntityExtractor:
         "TOO", "USE", "WHAT", "WHEN", "WHERE", "WHICH", "WHY", "WILL",
         "WITH", "COMPARE", "BETWEEN", "EXPLAIN", "DESCRIBE", "ABOUT",
         "GIVE", "LIST", "SHOW", "FIND", "TELL", "KNOW", "DOES",
+        "DEFINE", "SUMMARIZE", "SUMMARISE", "OPEN", "PROPOSED",
+        "PROBLEM", "STATEMENT", "PAPER",
         "PDF", "RAG", "LLM",
     })
 
@@ -149,7 +151,7 @@ class EntityExtractor:
 
     # Technology terms detected by pattern.
     _TECHNOLOGY_RE = re.compile(
-        r"\b(IoT|SCADA|PLC|DCS|HMI|OPC|MQTT|BACnet|Modbus|ERP|MES|CMMS|CNC|PID|VFD|RTU)\b",
+        r"\b(IoT|IoD|SCADA|PLC|DCS|HMI|OPC|MQTT|BACnet|Modbus|ERP|MES|CMMS|CNC|PID|VFD|RTU)\b",
         re.IGNORECASE,
     )
 
@@ -305,10 +307,14 @@ class EntityExtractor:
         for key, entry in self._registry.items():
             # Match by exact token or substring
             entry_lower = entry.text.lower()
-            if (
-                entry_lower in query_lower
-                or entry.normalized in query_tokens
-            ):
+            if not self._is_valid_registry_candidate(entry.text):
+                continue
+
+            exact_phrase = re.search(
+                rf"(?<![A-Za-z0-9]){re.escape(entry_lower)}(?![A-Za-z0-9])",
+                query_lower,
+            )
+            if exact_phrase or entry.normalized in query_tokens:
                 entities.append(
                     ExtractedEntity(
                         text=entry.text,
@@ -320,6 +326,15 @@ class EntityExtractor:
                 )
 
         return entities
+
+    @classmethod
+    def _is_valid_registry_candidate(cls, text: str) -> bool:
+        clean = text.strip()
+        if len(clean) < 2 and not clean.isdigit():
+            return False
+        if clean.upper() in cls._ACRONYM_STOPWORDS:
+            return False
+        return True
 
     def _acronym_detection(self, query: str) -> list[ExtractedEntity]:
         """Layer 3: Detect capitalized terms as potential entity names."""

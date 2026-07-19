@@ -11,7 +11,7 @@ from backend.services.prompt_builder import PromptBuilder
 from backend.config import GEMINI_API_KEY_ENV, FALLBACK_ANSWER
 
 
-GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_MODEL = "gemini-2.0-flash"
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 load_dotenv(ENV_FILE)
@@ -59,6 +59,9 @@ class LLMService:
         client: Any | None = None,
     ) -> None:
         self.model = model
+        print("=" * 60)
+        print("USING GEMINI MODEL:", self.model)
+        print("=" * 60)
         self.prompt_builder = PromptBuilder()
 
         # Load project-level environment variables without overriding values
@@ -103,10 +106,20 @@ class LLMService:
             logger.info("LLM generation skipped because no retrieved context was provided.")
             return self._fallback_response(clean_chunks)
 
-        context_str = "\n\n".join(
-            self._format_context_chunk(index, chunk)
-            for index, chunk in enumerate(clean_chunks, start=1)
-        )
+        parts = []
+
+        parts = []
+
+        for index, chunk in enumerate(clean_chunks, start=1):
+            formatted = self._format_context_chunk(index, chunk)
+
+            if formatted is None:
+                print("BAD CHUNK:", chunk)
+                continue
+
+            parts.append(formatted)
+
+        context_str = "\n\n".join(parts)
         prompt = self.prompt_builder.build(
             clean_question, 
             context_str, 
@@ -127,12 +140,19 @@ class LLMService:
             try:
                 # The LLM receives only the question and retrieved context. Retrieval,
                 # embeddings, ChromaDB, and PDF access remain outside this service.
+
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=prompt,
                     config=types.GenerateContentConfig(
-                        temperature=0.1,
-                        max_output_tokens=1200,
+                        temperature=0.2,
+                        max_output_tokens=2500,
+                        system_instruction=(
+                            "You are an expert technical writer. You must answer the user's question "
+                            "IN YOUR OWN WORDS. Synthesize the information. NEVER copy or reproduce "
+                            "the retrieved text or OCR passages verbatim. NEVER echo metadata, chunk labels, "
+                            "or passage numbers. Write a professional, standalone explanation."
+                        )
                     ),
                 )
                 break
@@ -151,13 +171,24 @@ class LLMService:
                     )
                     return self._build_contextual_fallback(clean_question, clean_chunks)
             except Exception as exc:
+                import traceback
+                error_trace = traceback.format_exc()
                 logger.warning(
-                    "Gemini generation failed, returning grounded fallback: %s",
-                    exc,
+                    "Gemini generation failed, returning grounded fallback:\n%s",
+                    error_trace,
                 )
                 return self._build_contextual_fallback(clean_question, clean_chunks)
 
         answer = self._extract_text(response)
+        if not answer.strip():
+            logger.warning("Generated answer too short. Falling back.")
+            return self._build_contextual_fallback(clean_question, clean_chunks)
+        
+        answer = answer.replace("Based on the retrieved document context,", "")
+        answer = answer.replace("Based on the retrieved context,", "")
+        answer = answer.replace("Document:", "")
+        answer = answer.replace("Section:", "")
+        answer = answer.replace("Chunk ID:", "")
         if not answer:
             logger.warning("Gemini returned an empty answer; using contextual fallback.")
             return self._build_contextual_fallback(clean_question, clean_chunks)
@@ -167,19 +198,7 @@ class LLMService:
         first_500 = answer[:500]
         last_500 = answer[-500:] if char_count > 500 else answer
 
-        print("\n===== GEMINI RAW OUTPUT =====")
-        print(f"Character Count: {char_count}")
-        print(f"Word Count: {word_count}")
-        print(f"First 500 chars:\n{first_500}")
-        print(f"Last 500 chars:\n{last_500}")
-        print("Contains Headings:")
-        print(f"  Overview: {'Overview' in answer}")
-        print(f"  Key Concepts: {'Key Concepts' in answer}")
-        print(f"  Applications: {'Applications' in answer}")
-        print(f"  Advantages: {'Advantages' in answer}")
-        print(f"  Limitations: {'Limitations' in answer}")
-        print(f"  Conclusion: {'Conclusion' in answer}")
-        print("===== END GEMINI OUTPUT =====\n")
+
 
         logger.info(
             "LLM generation completed: model=%s context_chunks=%s latency_ms=%s",
@@ -240,15 +259,22 @@ class LLMService:
 
     @staticmethod
     def _format_context_chunk(index: int, chunk: dict) -> str:
-        """Format one retrieved chunk with useful citation metadata."""
-
-        page_start = chunk.get("page_start")
-        page_end = chunk.get("page_end")
-        page_label = LLMService._page_label(page_start, page_end)
-        chunk_id = str(chunk.get("chunk_id", f"chunk_{index}"))
         text = str(chunk.get("text", "")).strip()
-
-        return f"[Context Chunk {index} | chunk_id={chunk_id} | {page_label}]\n{text}"
+        
+        clean_lines = []
+        for line in text.split('\n'):
+            lower_line = line.strip().lower()
+            if lower_line.startswith((
+                "source:", "page:", "document:", "chunk:", "chunk id:", 
+                "filename:", "section:", "metadata:", "citation:"
+            )):
+                continue
+            clean_lines.append(line)
+            
+        clean_text = "\n".join(clean_lines).strip()
+        clean_text = re.sub(r'\[source:[^\]]+\]', '', clean_text, flags=re.IGNORECASE)
+    
+        return f"PASSAGE {index}\n\n{clean_text}"
 
     def _fallback_response(self, retrieved_chunks: list[dict] | None = None) -> dict:
         """Return the standard grounded fallback without calling the model."""
@@ -278,7 +304,7 @@ class LLMService:
         best_chunk = ranked_chunks[0]
         excerpt = self._make_excerpt(best_chunk)
         citation = self._citation_for_chunk(best_chunk)
-        answer = f"Based on the retrieved document context, {excerpt}{citation}".strip()
+        answer = f"{excerpt}{citation}".strip()
 
         return {
             "answer": answer,

@@ -1,0 +1,30 @@
+[
+  {
+    "query": "What is D2DAP?",
+    "answer": "# D2DAP: Drone-to-Drone Authentication Protocol\n\n## Overview\nD2DAP, which stands for \"Provably Secure and Efficient Drone-to-Drone Authentication Protocol,\" is a robust and efficient authentication protocol designed for"
+  },
+  {
+    "query": "Full form of D2DAP",
+    "answer": "Source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF.pdf Page: 10 cryptographic operations are implemented using a Type-A elliptic curve defined by y2 \u2261(x3 + x) (mod q), with an embedding degree of 2 over a prime field Zq. The group Gq has an order of q = p \u00d7 h \u22121, where q \u22613 (mod 4), p is a Solinas prime of the form p = 2exp2 + sign1 \u00d7 2exp1 + sign0, h is the smallest constant (the cofactor), and p is the ord... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0040, page=10]"
+  },
+  {
+    "query": "What is AVISPA?",
+    "answer": "3.  *Execution and Verification*: The model is executed using AVISPA's back-ends, specifically OFMC and CL-AtSe, which simulate the protocol under an intruder's environment to verify if it"
+  },
+  {
+    "query": "Compare D2DAP and MAKA",
+    "answer": "Based on the retrieved document context, Fig. 4: AVISPA-based simulation for D2DAP protocol is executed via a secure channel encrypted using symmetric key cryptography. The MAKA phase is triggered by Di to agree on a session key SK with Dj. The channel characteristics are defined by the Dolev-Yao threat model (insecure channel). The secrecy of all identities and private keys of the drones constitutes the secrecy goals of the protocol model. The authen- tication goal of the model is to ensure mutual authentication be... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0039, page=10]"
+  },
+  {
+    "query": "What is Problem Statement 8?",
+    "answer": "Based on the retrieved document context, Service (DoS) and elevation-of-privilege attacks according to the STRIDE-based threat model. Table I shows the summary of the state-of-the-art protocols. TABLE I: Summary of state-of-the-art protocols Ref. Methodology Contributions Limitations [3] ECC, digital cer- tificate Certificate based ac- cess control for D2D and D2CS communica- tion. Anonymity and unlinkabilty problem. [8] RSA, digital cer- tificate Certificate based au- thentication, drone ad- dition and revocation.... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0007, page=2]"
+  },
+  {
+    "query": "What is Problem Statement 2?",
+    "answer": "Source: 6a38ce305640d_ET_AI_Hackathon_2026_Problem_Statements_copy (1).pdf Page: 2 IoT / SCADA Data Integration \u2022 Knowledge Graphs (equipment-permit-risk relationships) EXPECTED DELIVERABLES \u2022 Working Prototype \u2022 Architecture Diagram \u2022 Presentation Deck \u2022 Demo Video Evaluation Focus Compound risk detection accuracy versus single-sensor baselines, prediction lead time before incident threshold, geospatial evidence quality, regulatory compliance coverage (OISD/Factory Act/DGMS)... [source: 6a38ce305640d_ET_AI_Hackathon_2026_Problem_Statements_copy (1):chunk-0005, pages=2-4]"
+  },
+  {
+    "query": "What are the objectives of Problem Statement 8?",
+    "answer": "Source: 6a38ce305640d_ET_AI_Hackathon_2026_Problem_Statements_copy (1).pdf Page: 15 Technical Excellence 20% Scalability 15% User Experience 15% 8 AI for Industrial Knowledge Intelligence: Unified Asset & Operations Brain Theme: Industrial Intelligence / Document Management / Knowledge Engineering / Quality PROBLEM CONTEXT A 2024 McKinsey global survey found that professionals in asset-intensive industries spend an average of 35% of their working hours searching for informati... [source: 6a38ce305640d_ET_AI_Hackathon_2026_Problem_Statements_copy (1):chunk-0034, pages=15-16]"
+  }
+]

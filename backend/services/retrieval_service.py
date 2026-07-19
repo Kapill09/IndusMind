@@ -6,6 +6,7 @@ RetrievalStrategy defined in the QueryPlan.
 """
 
 import logging
+import re
 from typing import Any, TypedDict
 
 import backend.config as config
@@ -81,10 +82,21 @@ class HybridRetrievalExecutor:
         if not query_plan.search_queries:
             return []
             
-        return self.execute_query(query_plan.search_queries[0], query_plan.intent, scope, user_role)
+        return self.execute_query(
+            query_plan.search_queries[0],
+            query_plan.intent,
+            scope,
+            user_role,
+            query_plan=query_plan,
+        )
 
     def execute_query(
-        self, search_query: SearchQuery, intent: QueryIntent, scope: DocumentSelection, user_role: str
+        self,
+        search_query: SearchQuery,
+        intent: QueryIntent,
+        scope: DocumentSelection,
+        user_role: str,
+        query_plan: QueryPlan | None = None,
     ) -> list[RetrievalResult]:
         """Standard hybrid retrieval for a single overarching query."""
         
@@ -93,11 +105,12 @@ class HybridRetrievalExecutor:
             target_docs = [search_query.target_document_id]
             
         where = self._build_where(target_docs, None, user_role)
+        dense_top_k, bm25_top_k, fusion_top_k = self._adaptive_top_k(intent, search_query.text, query_plan)
 
-        dense = self._dense_search(search_query.text, where, MAX_SEMANTIC_CANDIDATES)
-        bm25 = self._bm25_search(search_query.text, target_docs, BM25_TOP_K)
+        dense = self._dense_search(search_query.text, where, dense_top_k)
+        bm25 = self._bm25_search(search_query.text, target_docs, bm25_top_k)
 
-        fused = self._reciprocal_rank_fusion([dense, bm25], top_k=30)
+        fused = self._reciprocal_rank_fusion([dense, bm25], top_k=fusion_top_k)
         
         # Apply search query weight
         for candidate in fused:
@@ -145,8 +158,10 @@ class HybridRetrievalExecutor:
         field_name = STRUCTURED_METADATA_FIELDS.get(query_plan.intent.value)
         
         if field_name:
+            # Find the entity that matches the field name (e.g., problem_statement_number -> PROBLEM_STATEMENT)
+            # or just take the first structural entity.
             target_entity = next(
-                (e for e in query_plan.entities if e.entity_type.value in query_plan.intent.value), 
+                (e for e in query_plan.entities if e.entity_type.value in field_name), 
                 None
             )
             
@@ -226,7 +241,7 @@ class HybridRetrievalExecutor:
             
             formatted.append({
                 "chunk_id": chunk.get("chunk_id", ""),
-                "text": chunk.get("text", ""),
+                "text": chunk.get("text","").strip(),
                 "page_start": self._metadata_int(metadata.get("page_start")),
                 "page_end": self._metadata_int(metadata.get("page_end")),
                 "metadata": metadata,
@@ -253,6 +268,10 @@ class HybridRetrievalExecutor:
             query_embedding = self.embedding_service.generate_embedding(query, is_query=True)
             results = self.vectordb_service.search(
                 query_embedding=query_embedding, top_k=top_k, where=where
+            )
+            results = sorted(
+            results,
+            key=lambda x: x.get("distance", 9999)
             )
             
             print(f"[RAG DEBUG] Retrieved Chunk Count: {len(results)}")
@@ -351,5 +370,31 @@ class HybridRetrievalExecutor:
     def _has_semantic_content(query: str) -> bool:
         words = [w for w in query.split() if w.lower() not in {"problem", "statement", "page", "section", "chapter", "number", "no"}]
         return len(words) > 1
+
+    @staticmethod
+    def _adaptive_top_k(intent: QueryIntent, query: str, query_plan: QueryPlan | None = None) -> tuple[int, int, int]:
+        lowered = query.lower()
+        if re.search(r"\b\d+\b|\bnumber\b|\bcount\b", lowered):
+            return 10, 10, 12
+
+        if intent == QueryIntent.COMPARISON or intent.value == "cross_document_comparison":
+            return 12, 10, 15
+
+        if intent == QueryIntent.SUMMARIZATION:
+            return 18, 18, 20
+
+        if intent == QueryIntent.DEFINITION:
+            return 8, 8, 10
+
+        if intent == QueryIntent.EXPLANATION:
+            return 10, 10, 12
+
+        if intent in (QueryIntent.PROCEDURE, QueryIntent.STEP_BY_STEP_GUIDE, QueryIntent.WORKFLOW, QueryIntent.TROUBLESHOOTING, QueryIntent.RECOMMENDATION):
+            return 6, 6, 8
+
+        if intent == QueryIntent.STRUCTURAL_LOOKUP:
+            return 3, 3, 4
+
+        return 5, 5, 6
 
 RetrievalService = HybridRetrievalExecutor

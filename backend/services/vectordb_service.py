@@ -65,6 +65,7 @@ class VectorDBService:
         persist_directory: str | Path = DEFAULT_CHROMA_PATH,
         collection_name: str = COLLECTION_NAME,
         client: Any | None = None,
+        auto_backfill_access_level: bool = True,
     ) -> None:
         # Keep these values on the class so all methods use the same database.
         self.persist_directory = Path(persist_directory)
@@ -80,6 +81,8 @@ class VectorDBService:
                 metadata={"description": "INDUS MIND industrial knowledge chunks"},
                 embedding_function=None,
             )
+            if auto_backfill_access_level:
+                self.backfill_missing_access_level()
         except Exception as exc:
             raise VectorDBOperationError("Failed to initialize ChromaDB collection.") from exc
 
@@ -226,6 +229,57 @@ class VectorDBService:
         )
         return formatted
 
+    def backfill_missing_access_level(self, default_access_level: str = "public") -> int:
+        """Add default access metadata to legacy Chroma records when possible.
+
+        Older ingests did not persist ``access_level`` even though retrieval now
+        filters by it. Updating metadata in place avoids requiring users to
+        delete and reingest existing vectors.
+        """
+
+        clean_access_level = str(default_access_level).strip() or "public"
+
+        try:
+            results = self.collection.get(include=["metadatas"])
+        except Exception as exc:
+            raise VectorDBOperationError("Failed to inspect ChromaDB metadata.") from exc
+
+        ids = results.get("ids", []) or []
+        metadatas = results.get("metadatas", []) or []
+
+        update_ids: list[str] = []
+        update_metadatas: list[dict[str, str | int | float | bool]] = []
+
+        for index, record_id in enumerate(ids):
+            metadata = dict(metadatas[index] or {}) if index < len(metadatas) else {}
+            access_level = str(metadata.get("access_level", "")).strip()
+            if access_level:
+                continue
+
+            metadata["access_level"] = clean_access_level
+            update_ids.append(record_id)
+            update_metadatas.append(metadata)
+
+        if not update_ids:
+            return 0
+
+        try:
+            self.collection.update(ids=update_ids, metadatas=update_metadatas)
+        except Exception as exc:
+            raise VectorDBOperationError(
+                "Existing vectors are missing access_level metadata and ChromaDB "
+                "could not update them in place. Re-ingestion is required to make "
+                "role-filtered retrieval return these legacy chunks."
+            ) from exc
+
+        logger.info(
+            "Backfilled Chroma access metadata: collection=%s records=%s default_access_level=%s",
+            self.collection_name,
+            len(update_ids),
+            clean_access_level,
+        )
+        return len(update_ids)
+
     def delete_document(self, document_id: str) -> None:
         """Delete all chunks for one source document from ChromaDB.
 
@@ -330,6 +384,7 @@ class VectorDBService:
             "chunk_id": chunk["chunk_id"],
             "document_id": str(source_metadata.get("document_id", "")),
             "filename": str(source_metadata.get("filename", "")),
+            "access_level": str(source_metadata.get("access_level", "public")).strip() or "public",
             "page_start": VectorDBService._metadata_int(chunk.get("page_start")),
             "page_end": VectorDBService._metadata_int(chunk.get("page_end")),
             "chunk_index": VectorDBService._metadata_int(source_metadata.get("chunk_index")),

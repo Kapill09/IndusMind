@@ -174,10 +174,16 @@ class ContextValidator:
             ]
             
             for ps in ps_entities:
-                found = any(
-                    str(c.get("metadata", {}).get("problem_statement_number", "")).strip() == ps.normalized
-                    for c in chunks
-                )
+                found = False
+                for c in chunks:
+                    meta_val = str(c.get("metadata", {}).get("problem_statement_number", "")).strip()
+                    text_val = str(c.get("text", "")).lower()
+                    if meta_val == ps.normalized:
+                        found = True
+                        break
+                    if ps.text.lower() in text_val or f"statement {ps.normalized}" in text_val or f"stmt {ps.normalized}" in text_val:
+                        found = True
+                        break
                 if not found:
                     return ContextValidation(
                         verdict=ValidationVerdict.FAIL,

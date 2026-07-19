@@ -79,14 +79,26 @@ class QueryExpander:
         if strategy == "structured":
             return self._expand_structured(query, entities)
 
-        if intent == "comparison":
+        if intent == "structural_lookup" and self._looks_like_problem_statement(query):
+            return self._expand_problem_statement(query, entities)
+
+        if intent in ("comparison", "cross_document_comparison"):
             return self._expand_comparison(query, entities)
 
-        if intent in ("definition", "exploratory"):
+        if intent == "definition":
             return self._expand_definition(query, entities)
+
+        if intent == "explanation":
+            return self._expand_explanation(query, entities)
+
+        if intent == "summarization":
+            return self._expand_summarization(query, entities)
 
         if strategy == "exhaustive":
             return self._expand_exhaustive(query, entities)
+
+        if intent == "navigation":
+            return self._expand_default(query, entities)
 
         if intent == "cross_document":
             search_queries = self._expand_cross_document(query, entities)
@@ -154,7 +166,7 @@ CRITICAL RULES:
 """
         try:
             response = self.client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.0)
             )
@@ -199,10 +211,34 @@ CRITICAL RULES:
             )
         ]
 
+        parsed_terms = self._parse_comparison_terms(query)
+        if len(parsed_terms) >= 2:
+            left, right = parsed_terms[0], parsed_terms[1]
+            return [
+                SearchQuery(text=f"{left} vs {right}", query_type=SearchQueryType.HYBRID, weight=1.0),
+                SearchQuery(text=f"Difference between {left} and {right}", query_type=SearchQueryType.HYBRID, weight=0.9),
+                SearchQuery(text=f"Advantages of {right} over {left}", query_type=SearchQueryType.HYBRID, weight=0.7),
+            ]
+
+        if len(comparison_entities) < 2:
+            return [
+                SearchQuery(
+                    text=self._clean_query_text(query),
+                    query_type=SearchQueryType.HYBRID,
+                    weight=1.0,
+                )
+            ]
+
+        left = comparison_entities[0].text
+        right = comparison_entities[1].text
+        return [
+            SearchQuery(text=f"{left} vs {right}", query_type=SearchQueryType.HYBRID, weight=1.0),
+            SearchQuery(text=f"Difference between {left} and {right}", query_type=SearchQueryType.HYBRID, weight=0.9),
+            SearchQuery(text=f"Advantages of {right} over {left}", query_type=SearchQueryType.HYBRID, weight=0.7),
+        ]
+
         # Extract the topic context from the query (everything except entity names
         # and comparison keywords)
-        topic = self._extract_topic(query, comparison_entities)
-
         if len(comparison_entities) < 2:
             # Cannot decompose — treat as default with emphasis on comparison
             search_queries.append(
@@ -271,23 +307,35 @@ CRITICAL RULES:
         topic = self._strip_question_prefix(query)
 
         search_queries = [
-            SearchQuery(
-                text=f"{topic} definition overview introduction",
-                query_type=SearchQueryType.HYBRID,
-                weight=1.0,
-            ),
-            SearchQuery(
-                text=f"{topic} applications use cases examples",
-                query_type=SearchQueryType.BM25,
-                weight=0.6,
-            ),
-            SearchQuery(
-                text=query,
-                query_type=SearchQueryType.DENSE,
-                weight=0.8,
-            ),
+            SearchQuery(text=self._clean_query_text(query), query_type=SearchQueryType.HYBRID, weight=1.0),
+            SearchQuery(text=f"{topic} full form meaning stands for acronym abbreviation", query_type=SearchQueryType.HYBRID, weight=0.95),
+            SearchQuery(text=f"{topic} overview", query_type=SearchQueryType.HYBRID, weight=0.9),
+            SearchQuery(text=self._definition_context_query(topic), query_type=SearchQueryType.HYBRID, weight=0.8),
         ]
         return search_queries
+
+    def _expand_explanation(
+        self, query: str, entities: list[ExtractedEntity]
+    ) -> list[SearchQuery]:
+        """Expand an explanation query into focused mechanism variants."""
+
+        topic = self._strip_question_prefix(query)
+        return [
+            SearchQuery(text=f"{topic} architecture", query_type=SearchQueryType.HYBRID, weight=1.0),
+            SearchQuery(text=f"{topic} reranking", query_type=SearchQueryType.HYBRID, weight=0.8),
+            SearchQuery(text=f"{topic} working", query_type=SearchQueryType.HYBRID, weight=0.8),
+        ]
+
+    def _expand_summarization(
+        self, query: str, entities: list[ExtractedEntity]
+    ) -> list[SearchQuery]:
+        """Expand a summary request into concise summary variants."""
+
+        topic = self._strip_question_prefix(query)
+        return [
+            SearchQuery(text=f"{topic} summary", query_type=SearchQueryType.HYBRID, weight=1.0),
+            SearchQuery(text=f"{topic} overview", query_type=SearchQueryType.HYBRID, weight=0.8),
+        ]
 
     def _expand_exhaustive(
         self, query: str, entities: list[ExtractedEntity]
@@ -335,6 +383,68 @@ CRITICAL RULES:
         return [
             SearchQuery(text=query, query_type=SearchQueryType.METADATA, weight=1.0)
         ]
+
+    @staticmethod
+    def _looks_like_problem_statement(query: str) -> bool:
+        normalized = query.lower()
+        if "problem statement" in normalized:
+            return True
+        if re.search(r"\bps\s*\d+\b", normalized):
+            return True
+        if re.search(r"\bstatement\s*#?\s*\d+\b", normalized):
+            return True
+        return False
+
+    def _expand_problem_statement(self, query: str, entities: list[ExtractedEntity]) -> list[SearchQuery]:
+        text = self._clean_query_text(query)
+        expanded_variants = [text]
+        if re.search(r"\bproblem statement\s+(\d+)\b", text, flags=re.IGNORECASE):
+            number = re.search(r"\bproblem statement\s+(\d+)\b", text, flags=re.IGNORECASE).group(1)
+            expanded_variants.extend([
+                f"Problem Statement {number}",
+                f"Problem Statement {self._number_to_words(number)}",
+                f"PS{number}",
+                f"Challenge {number}",
+                f"Statement #{number}",
+            ])
+        elif re.search(r"\bps\s*(\d+)\b", text, flags=re.IGNORECASE):
+            number = re.search(r"\bps\s*(\d+)\b", text, flags=re.IGNORECASE).group(1)
+            expanded_variants.extend([
+                f"Problem Statement {number}",
+                f"Problem Statement {self._number_to_words(number)}",
+                f"PS{number}",
+                f"Challenge {number}",
+                f"Statement #{number}",
+            ])
+        else:
+            expanded_variants.extend([
+                f"{text} section",
+                f"{text} clause",
+                f"{text} requirement",
+                f"{text} sop",
+                f"{text} manual",
+            ])
+
+        return [
+            SearchQuery(text=variant, query_type=SearchQueryType.METADATA, weight=1.0)
+            for variant in expanded_variants[:6]
+        ]
+
+    @staticmethod
+    def _number_to_words(number: str) -> str:
+        mapping = {
+            "1": "One",
+            "2": "Two",
+            "3": "Three",
+            "4": "Four",
+            "5": "Five",
+            "6": "Six",
+            "7": "Seven",
+            "8": "Eight",
+            "9": "Nine",
+            "10": "Ten",
+        }
+        return mapping.get(number, number)
 
     def _expand_default(
         self, query: str, entities: list[ExtractedEntity]
@@ -384,12 +494,46 @@ CRITICAL RULES:
         """Remove common question prefixes to extract the topic."""
 
         topic = re.sub(
-            r"^(explain|describe|what is|what are|tell me about|overview of|define)\s+",
+            r"^(explain|describe|what is|what are|who is|who are|who proposed|tell me about|overview of|define|summarize|summarise|summary of)\s+",
             "",
             query,
             flags=re.IGNORECASE,
         ).strip().rstrip("?.")
         return topic if topic else query
+
+    @staticmethod
+    def _clean_query_text(query: str) -> str:
+        return query.strip().rstrip("?.")
+
+    @staticmethod
+    def _definition_context_query(topic: str) -> str:
+        normalized = topic.strip().lower()
+        if normalized == "d2dap":
+            return f"{topic} authentication protocol"
+        return f"{topic} explanation"
+
+    @staticmethod
+    def _parse_comparison_terms(query: str) -> list[str]:
+        clean = query.strip().rstrip("?.")
+        patterns = (
+            r"^\s*compare\s+(.+?)\s+(?:and|with|to)\s+(.+?)\s*$",
+            r"^\s*difference\s+between\s+(.+?)\s+and\s+(.+?)\s*$",
+            r"^\s*(.+?)\s+(?:versus|vs\.?)\s+(.+?)\s*$",
+            r"^\s*contrast\s+(.+?)\s+(?:and|with)\s+(.+?)\s*$",
+        )
+
+        for pattern in patterns:
+            match = re.search(pattern, clean, flags=re.IGNORECASE)
+            if match:
+                return [
+                    QueryExpander._clean_comparison_term(match.group(1)),
+                    QueryExpander._clean_comparison_term(match.group(2)),
+                ]
+        return []
+
+    @staticmethod
+    def _clean_comparison_term(term: str) -> str:
+        return re.sub(r"\s+", " ", term).strip(" .,:;")
 
     @staticmethod
     def _rephrase(query: str) -> str:

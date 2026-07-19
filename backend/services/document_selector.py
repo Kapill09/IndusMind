@@ -6,7 +6,6 @@ strict single-document isolation when only one PDF is selected.
 """
 
 import logging
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -21,25 +20,39 @@ class DocumentScope(str, Enum):
     STRICT_SINGLE = "strict_single"       # Exactly one PDF — NEVER search others
     STRICT_MULTI = "strict_multi"         # Multiple PDFs — only those
     ALL = "all"                           # No filter — search everything
+    ENTIRE_KB = "all"                    # Backward-compatible alias for the broader API
     ENTITY_RESOLVED = "entity_resolved"   # System resolved docs via entity registry
 
 
-@dataclass
 class DocumentSelection:
     """Result of the document selection decision."""
 
-    selected_ids: list[str]
-    scope: DocumentScope
-    reason: str
+    def __init__(
+        self,
+        selected_ids: list[str],
+        scope: DocumentScope | str,
+        reason: str = "",
+        is_scoped: bool | None = None,
+        is_strict: bool | None = None,
+    ) -> None:
+        self.selected_ids = list(selected_ids or [])
+        self.scope = scope if isinstance(scope, DocumentScope) else DocumentScope(scope)
+        self.reason = reason or f"Scope={self.scope.value}"
+        self._is_scoped = is_scoped
+        self._is_strict = is_strict
 
     @property
     def is_scoped(self) -> bool:
         """True when retrieval is restricted to specific documents."""
+        if self._is_scoped is not None:
+            return self._is_scoped
         return self.scope != DocumentScope.ALL
 
     @property
     def is_strict(self) -> bool:
         """True when out-of-scope results must be completely rejected."""
+        if self._is_strict is not None:
+            return self._is_strict
         return self.scope in (DocumentScope.STRICT_SINGLE, DocumentScope.STRICT_MULTI)
 
 

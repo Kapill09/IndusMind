@@ -1,0 +1,18 @@
+[
+  {
+    "query": "What is D2DAP?",
+    "answer": "D2DAP: Provably Secure and Efficient 1 D2DAP: Provably Secure and Efficient Drone-to-Drone Authentication Protocol Using Threshold Cryptography and PUF Krittibas Parai , Prasanta Kumar Roy , Pankaj Kumar , SK Hafizul Islam Abstract\u2014Drone-to-Drone (D2D) communication has significant applications in many real-time monitoring and surveillance systems. However, communication security and efficiency are crucial for ensuring confidentiality, integrity, and availability in such syst... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0001, page=1]"
+  },
+  {
+    "query": "Full form of D2DAP",
+    "answer": "cryptographic operations are implemented using a Type-A elliptic curve defined by y2 \u2261(x3 + x) (mod q), with an embedding degree of 2 over a prime field Zq. The group Gq has an order of q = p \u00d7 h \u22121, where q \u22613 (mod 4), p is a Solinas prime of the form p = 2exp2 + sign1 \u00d7 2exp1 + sign0, h is the smallest constant (the cofactor), and p is the order of Gp. Table VI summarizes the three distinct security levels along with the corresponding parameter sizes [32]. AES in CTR mode i... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0040, page=10]"
+  },
+  {
+    "query": "Compare D2DAP and MAKA",
+    "answer": "A. Session Key In this section, we prove that both Di and Dj mutually authenticate each other and compute a common session key in every session. During the MAKA phase, Di computes {CM, \u03c31, \u03c32} for Dj and sends it to Dj, where (\u03c31, \u03c32) = 2http://www.avispa-project.org GenSign(CM, aik, Ti, xi), \u03b1 = rH(aik\u2225Ti)P = (\u03b1x, \u03b1y), and \u03c31 = \u03b1x (see Algorithm 1). Next, Dj computes K = xjYi = xixjP, and recovers (aik\u2225bik\u2225Ti) = DecK(CM). Now, we have \u03b1 = (\u03b2P + \u03b3Yi)H(aik\u2225Ti) = (Mi\u03c3\u22121 2 P + \u03c3... [source: D2DAP_Provably_Secure_and_Efficient_Drone-to-Drone_Authentication_Protocol_Using_Threshold_Cryptography_and_PUF:chunk-0021, page=5]"
+  },
+  {
+    "query": "What is Problem Statement 8?",
+    "answer": "Technical Excellence 20% Scalability 15% User Experience 15% 8 AI for Industrial Knowledge Intelligence: Unified Asset & Operations Brain Theme: Industrial Intelligence / Document Management / Knowledge Engineering / Quality PROBLEM CONTEXT A 2024 McKinsey global survey found that professionals in asset-intensive industries spend an average of 35% of their working hours searching for information, clarifying instructions, or recreating documents that already exist somewhere in... [source: 6a38ce305640d_ET_AI_Hackathon_2026_Problem_Statements_copy (1):chunk-0034, pages=15-16]"
+  }
+]

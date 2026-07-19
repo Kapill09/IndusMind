@@ -113,7 +113,10 @@ class QueryAnalyzer:
 
     # Heuristic patterns for intent detection fallback (when LLM is unavailable)
     _COMPARISON_RE = re.compile(
-        r"\b(compare|comparison|versus|vs\.?|differ|difference|between)\b",
+        r"\b(compare|comparison|versus|vs\.?|difference|contrast)\b"
+        r"|\bbetter\s+than\b"
+        r"|\badvantages?\s+over\b"
+        r"|\bdisadvantages?\s+compared\s+to\b",
         re.IGNORECASE,
     )
     _EXPLORATORY_RE = re.compile(
@@ -228,10 +231,13 @@ class QueryAnalyzer:
 
 Categories:
 - FACTOID: asking for a specific fact or answer
-- COMPARISON: comparing two or more things
+- COMPARISON: explicit comparison using words like compare, difference, versus, vs, better than, advantages over, disadvantages compared to, or contrast
 - EXPLORATORY: broad explanation or overview request
 - PROCEDURAL: asking how to do something
 - ANALYTICAL: asking for analysis, evaluation, or assessment
+
+Rules:
+- "What is X?", "Who is X?", and "Define X" are FACTOID or EXPLORATORY, not COMPARISON, unless explicit comparison language is present.
 
 Query: {query}
 
@@ -242,7 +248,7 @@ Category:"""
             started_at = perf_counter()
 
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.0,
@@ -286,7 +292,7 @@ Category:"""
 
         # Heuristic fallback: split at comparison keywords
         parts = re.split(
-            r"\b(?:compare|comparison|versus|vs\.?|with|and|to|between)\b",
+            r"\b(?:compare|comparison|versus|vs\.?|difference|contrast)\b|\bbetter\s+than\b|\badvantages?\s+over\b|\bdisadvantages?\s+compared\s+to\b",
             query,
             flags=re.IGNORECASE,
         )
@@ -316,7 +322,7 @@ Sub-queries:"""
             from google.genai import types
 
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.0,
@@ -382,7 +388,7 @@ Passage:"""
             from google.genai import types
 
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,

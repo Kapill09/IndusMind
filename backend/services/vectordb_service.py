@@ -163,7 +163,29 @@ class VectorDBService:
             if where:
                 query_args["where"] = where
 
+            logger.info("=" * 80)
+            logger.info("WHERE FILTER = %s", where)
+            logger.info("QUERY ARGS = %s", query_args)
+            logger.info("=" * 80)
+            logger.info("=" * 80)
+            logger.info("CHROMA QUERY")
+            logger.info("WHERE FILTER = %s", where)
+            logger.info("=" * 80)
+            
             results = self.collection.query(**query_args)
+            
+            logger.info("Returned %d chunks", len(results["ids"][0]))
+
+            for i in range(min(5, len(results["ids"][0]))):
+                meta = results["metadatas"][0][i]
+                logger.info(
+                    "[%d] document_id=%s filename=%s",
+                    i + 1,
+                    meta.get("document_id"),
+                    meta.get("filename"),
+                )
+
+            logger.info("Returned %d results", len(results.get("ids", [[]])[0]))
 
         except Exception as exc:
             raise VectorDBOperationError("Failed to search ChromaDB collection.") from exc
@@ -427,3 +449,8 @@ class VectorDBService:
             )
 
         return formatted_results
+
+        docs = self.collection.get(include=["metadatas"])
+
+        for meta in docs["metadatas"]:
+            print(meta.get("document_id"))

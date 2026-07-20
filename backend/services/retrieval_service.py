@@ -6,6 +6,21 @@ Reciprocal Rank Fusion (RRF).  Source filtering is enforced as a hard
 invariant via the ScopeEnforcer.
 """
 
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from transformers.models.chameleon import image_processing_chameleon_fast
+from backend.services import query_analyzer
 import logging
 import re
 from typing import Any, Iterable, TypedDict
@@ -103,12 +118,18 @@ class RetrievalService:
         self.query_analyzer = query_analyzer or QueryAnalyzer()
 
     def retrieve(
-        self,
-        question: str,
-        top_k: int = 8,
-        document_ids: list[str] | None = None,
+    self,
+    question: str,
+    top_k: int = 8,
+    document_ids: list[str] | None = None,
     ) -> RetrievalResponse:
         """Retrieve the top K chunks using three-channel hybrid retrieval with RRF."""
+
+        logger.info("=" * 80)
+        logger.info("RETRIEVAL SERVICE")
+        logger.info("Question: %s", question)
+        logger.info("Received document_ids: %s", document_ids)
+        logger.info("=" * 80)
 
         clean_question = self._validate_question(question)
         clean_top_k = self._validate_top_k(top_k)
@@ -210,22 +231,58 @@ class RetrievalService:
             for r in dense_results
         ]
 
+        logger.info("=" * 80)
+        logger.info("VECTOR SEARCH RESULTS")
+        logger.info("Retrieved %d chunks", len(dense_ranked))
+
+        for i, chunk in enumerate(dense_ranked[:10], 1):
+            logger.info(
+                "%d | %.4f | %s",
+                i,
+                chunk.get("distance", 0) if chunk.get("distance") is not None else 0,
+                chunk.get("text", "")[:150].replace("\n", " ")
+            )
+
         # ── Channel B: BM25 sparse retrieval ─────────────────────────
         bm25_ranked: list[dict[str, Any]] = []
+
+        logger.info(
+            "BM25 Index Size = %d",
+            self.bm25_service.index_size if self.bm25_service else -1   ,
+        )
+
         if self.bm25_service and self.bm25_service.index_size > 0:
             bm25_results = self.bm25_service.search(
-                query=query, top_k=BM25_TOP_K, document_ids=document_ids
+                query=query,
+        top_k=BM25_TOP_K,
+                document_ids=document_ids,
             )
+
+            logger.info("=" * 60)
+            logger.info("BM25 RESULTS")
+            logger.info(bm25_results[:5])
+
             bm25_ranked = [
                 {
                     "chunk_id": r["chunk_id"],
                     "text": r["text"],
-                    "metadata": r.get("metadata", {}),
-                    "distance": None,
-                    "bm25_score": r["score"],
-                }
-                for r in bm25_results
-            ]
+            "metadata": r.get("metadata", {}),
+            "distance": None,
+            "bm25_score": r["score"],
+        }
+        for r in bm25_results
+    ]
+
+            logger.info("=" * 80)
+            logger.info("BM25 RESULTS")
+
+            for i, chunk in enumerate(bm25_ranked[:10], 1):
+                logger.info(
+                    "%d | %.4f | %s",
+                    i,
+                    chunk.get("bm25_score", 0),
+                    chunk.get("text", "")[:150].replace("\n", " ")
+                )
 
         # ── Channel C: Structured metadata matching ──────────────────
         structured_ranked: list[dict[str, Any]] = []
@@ -239,6 +296,24 @@ class RetrievalService:
             [dense_ranked, bm25_ranked, structured_ranked],
             top_k=max(top_k * 3, 30),  # Over-retrieve for reranker
         )
+        for c in fused[:10]:
+            logger.info(
+                "%s | %.4f | %s",
+                c["metadata"].get("filename"),
+                c.get("rrf_score"),
+                c["text"][:100]
+            )
+
+        logger.info("=" * 80)
+        logger.info("HYBRID RESULTS")
+
+        for i, chunk in enumerate(fused[:10], 1):
+            logger.info(
+                "%d | %.4f | %s",
+                i,
+                chunk.get("rrf_score", 0),
+                chunk.get("text", "")[:150].replace("\n", " ")
+            )
 
         # ── Format results ───────────────────────────────────────────
         return self._format_fused_results(fused, analyzed)
@@ -423,6 +498,19 @@ class RetrievalService:
         # Sort by RRF score
         sorted_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
 
+        logger.info("=" * 80)
+        logger.info("RRF FINAL RANKING")
+
+        for rank, chunk_id in enumerate(sorted_ids[:10], start=1):
+            item = chunk_data[chunk_id]
+            logger.info(
+            "%d | %.4f | %s | %s",
+            rank,
+            rrf_scores[chunk_id],
+        item.get("metadata", {}).get("filename"),
+        item.get("text", "")[:120].replace("\n", " "),
+    )
+
         results: list[dict[str, Any]] = []
         for chunk_id in sorted_ids[:top_k]:
             item = chunk_data[chunk_id]
@@ -482,8 +570,8 @@ class RetrievalService:
             raise RetrievalValidationError("top_k must be an integer.")
         if top_k <= 0:
             raise RetrievalValidationError("top_k must be greater than 0.")
-        if top_k > 20:
-            raise RetrievalValidationError("top_k cannot exceed 20.")
+        if top_k > 100:
+            raise RetrievalValidationError("top_k cannot exceed 100.")
         return top_k
 
     @staticmethod

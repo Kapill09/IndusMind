@@ -1,7 +1,9 @@
+from anyio import to_thread
 from pathlib import Path
 from typing import TypedDict
 
 import fitz
+import re
 
 
 class PDFPageText(TypedDict):
@@ -66,6 +68,29 @@ class PDFService:
                 for page_number, page in enumerate(document, start=1):
 
                     text = page.get_text("text").strip()
+
+                    # Remove page numbers
+                    text = re.sub(r"^\d+\s*$", "", text, flags=re.MULTILINE)
+
+                    # Remove IEEE copyright
+                    text = re.sub(r"©.*?IEEE.*", "", text)
+
+                    # Remove downloaded notices
+                    text = re.sub(r"Authorized licensed use.*", "", text)
+
+                    # Remove DOI
+                    text = re.sub(r"DOI\s*10\.\d+\/.*", "", text)
+
+                    # Remove publication notice
+                    text = re.sub(
+                        r"This article has been accepted.*?final publication\.",
+                        "",
+                        text,
+                        flags=re.DOTALL,
+                    )
+
+                    # Collapse empty lines
+                    text = re.sub(r"\n{3,}", "\n\n", text)
 
                     # Ignore completely empty pages.
                     if not text:

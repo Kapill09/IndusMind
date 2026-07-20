@@ -28,8 +28,8 @@ class PageText(TypedDict):
 class ChunkingConfig:
     """Settings that control how text is split for retrieval."""
 
-    chunk_size: int = 1500  # Character equivalent of ~350 tokens
-    chunk_overlap: int = 300 # 20% overlap
+    chunk_size: int = 900  # Character equivalent of ~350 tokens
+    chunk_overlap: int = 150 # 20% overlap
     min_chunk_size: int = 120
     separators: tuple[str, ...] = ("\n\n", "\n", ". ", "; ", ", ", " ")
 
@@ -340,6 +340,22 @@ def _extract_heading(text: str) -> str | None:
 
         if re.search(r"\b(chapter|ch\.|section|sec\.|problem\s+statement|figure|fig\.|table)\b", line, flags=re.IGNORECASE):
             return line
+
+            if line.lower() in [
+                "abstract",
+                "references",
+                "keywords",
+            ]:
+                continue
+
+            if "copyright" in line.lower():
+                continue
+
+            if "downloaded on" in line.lower():
+                continue
+
+            if "ieee" in line.lower():
+                continue
         if _looks_like_heading(line):
             return line
 

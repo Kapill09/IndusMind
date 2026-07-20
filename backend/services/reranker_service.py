@@ -101,6 +101,15 @@ class RerankerService:
             reranker_score = float(scores[i])
             metadata["reranker_score"] = round(reranker_score, 4)
             chunk["score"] = round(reranker_score, 4)
+            print("\n===== RERANK RESULTS =====")
+
+            for c in sorted(chunks, key=lambda x: x["score"], reverse=True):
+
+                print(c["score"])
+
+                print(c["text"][:250])
+
+                print("-"*60)
 
         # Separate structured matches from regular results
         structured_matches: list[dict[str, Any]] = []
@@ -119,7 +128,11 @@ class RerankerService:
         regular_chunks.sort(key=lambda x: x["score"], reverse=True)
 
         # Apply minimum score threshold to regular chunks
-        regular_chunks = [c for c in regular_chunks if c["score"] >= self._min_score]
+        # regular_chunks = [c for c in regular_chunks if c["score"] >= self._min_score]
+        # TEMPORARY
+        logger.info("Skipping minimum score filtering.")
+
+        regular_chunks = regular_chunks
 
         # Build final list: guaranteed slots for structured matches, then fill from regular
         final: list[dict[str, Any]] = []
@@ -131,6 +144,11 @@ class RerankerService:
 
         # Fill remaining slots from regular chunks (and any remaining structured matches)
         remaining_pool = structured_matches[guaranteed_count:] + regular_chunks
+        
+        logger.info("Structured matches = %d", len(structured_matches))
+        logger.info("Regular chunks = %d", len(regular_chunks))
+        logger.info("Remaining pool = %d", len(remaining_pool))
+
         remaining_pool.sort(key=lambda x: x["score"], reverse=True)
 
         for chunk in remaining_pool:
@@ -138,6 +156,7 @@ class RerankerService:
                 break
             if chunk["chunk_id"] not in {c["chunk_id"] for c in final}:
                 final.append(chunk)
+            logger.info("Current final size = %d", len(final))
 
         logger.info(
             "Reranking completed: candidates=%d structured=%d guaranteed=%d final=%d",
@@ -146,5 +165,12 @@ class RerankerService:
             guaranteed_count,
             len(final),
         )
+        logger.info("FINAL CHUNKS")
 
+        for c in final:
+            logger.info(
+                "%s | %.4f",
+                c["chunk_id"],
+                c["score"]
+            )
         return final

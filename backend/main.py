@@ -73,3 +73,12 @@ def home():
         "message": "Welcome to INDUS MIND",
         "status": "Backend Running Successfully",
     }
+
+@app.get('/api/debug_chroma')
+def debug_chroma():
+    from backend.routes.ask import get_rag_pipeline
+    pipeline = get_rag_pipeline()
+    col = pipeline.retrieval_service.vectordb_service.collection
+    docs = col.get(include=['metadatas'])
+    doc_ids = set([m.get('document_id') for m in docs.get('metadatas', []) if m])
+    return {'doc_ids': list(doc_ids)}

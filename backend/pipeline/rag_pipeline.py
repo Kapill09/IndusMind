@@ -179,6 +179,23 @@ class RAGPipeline:
                 len(retrieved_chunks),
                 len(top_candidates),
             )
+            logger.info("=" * 80)
+            logger.info("--- CHUNKS IMMEDIATELY AFTER RERANKING ---")
+            top_ids = {c.get("chunk_id") for c in top_candidates}
+            for chunk in retrieved_chunks:
+                cid = chunk.get("chunk_id")
+                meta = chunk.get("metadata", {})
+                is_discarded = cid not in top_ids
+                logger.info(
+                    "Reranked Chunk | chunk_id: %s | document_id: %s | filename: %s | similarity_distance: %s | rerank_score: %s | discarded: %s",
+                    cid,
+                    meta.get("document_id"),
+                    meta.get("filename"),
+                    chunk.get("distance"),
+                    meta.get("reranker_score"),
+                    is_discarded
+                )
+            logger.info("=" * 80)
             retrieved_chunks = top_candidates
 
         # ── Stage 3: MMR Diversification ─────────────────────────────

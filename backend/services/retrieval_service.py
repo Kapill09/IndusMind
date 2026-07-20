@@ -128,12 +128,22 @@ class RetrievalService:
         logger.info("=" * 80)
         logger.info("RETRIEVAL SERVICE")
         logger.info("Question: %s", question)
-        logger.info("Received document_ids: %s", document_ids)
+        logger.info("Raw selected_document_ids received from the frontend: %s", document_ids)
         logger.info("=" * 80)
 
         clean_question = self._validate_question(question)
         clean_top_k = self._validate_top_k(top_k)
         clean_document_ids = sanitize_document_ids(document_ids)
+        logger.info("Normalized selected_document_ids: %s", clean_document_ids)
+        
+        # Log first 5 docs in Chroma
+        try:
+            first_five = self.vectordb_service.collection.get(limit=5, include=["metadatas"])
+            logger.info("--- FIRST 5 DOCUMENTS STORED IN CHROMA ---")
+            for m in first_five.get("metadatas") or []:
+                logger.info("document_id: %s | filename: %s", m.get("document_id"), m.get("filename"))
+        except Exception as e:
+            logger.info("Could not fetch first 5 documents from Chroma: %s", e)
 
         # ── Stage 1: Query Analysis ──────────────────────────────────
         analyzed = self.query_analyzer.full_analyze(clean_question)
@@ -176,6 +186,20 @@ class RetrievalService:
             )
 
         # ── Final scope enforcement ──────────────────────────────────
+        logger.info("--- TOP 10 RETRIEVED CHUNKS (Pre-Filter) ---")
+        for i, res in enumerate(all_results[:10], start=1):
+            doc_id = res["metadata"].get("document_id")
+            passed = (not clean_document_ids) or (doc_id in clean_document_ids)
+            logger.info("Rank %d | chunk_id: %s | document_id: %s | score: %.4f | passed_filter: %s", i, res.get("chunk_id"), doc_id, res.get("score", 0.0), passed)
+
+        logger.info("--- CHUNK COUNT PER DOCUMENT (Pre-Filter) ---")
+        doc_counts = {}
+        for res in all_results:
+            doc_id = res["metadata"].get("document_id")
+            doc_counts[doc_id] = doc_counts.get(doc_id, 0) + 1
+        for doc_id, count in doc_counts.items():
+            logger.info("document_id: %s -> %d chunks", doc_id, count)
+
         safe_results = scope.enforce(all_results)
 
         logger.info(
@@ -212,6 +236,7 @@ class RetrievalService:
             raise RetrievalEmbeddingError("Failed to generate question embedding.") from exc
 
         where = {"document_id": {"$in": document_ids}} if document_ids else None
+        logger.info("Exact where filter sent to Chroma: %s", where)
         try:
             dense_results = self.vectordb_service.search(
                 query_embedding=question_embedding,
@@ -232,16 +257,17 @@ class RetrievalService:
         ]
 
         logger.info("=" * 80)
-        logger.info("VECTOR SEARCH RESULTS")
-        logger.info("Retrieved %d chunks", len(dense_ranked))
-
-        for i, chunk in enumerate(dense_ranked[:10], 1):
+        logger.info("Total chunks returned by Chroma: %d", len(dense_ranked))
+        for chunk in dense_ranked:
+            meta = chunk.get("metadata", {})
             logger.info(
-                "%d | %.4f | %s",
-                i,
-                chunk.get("distance", 0) if chunk.get("distance") is not None else 0,
-                chunk.get("text", "")[:150].replace("\n", " ")
+                "chunk_id: %s | document_id: %s | filename: %s | page: %s",
+                chunk.get("chunk_id"),
+                meta.get("document_id"),
+                meta.get("filename"),
+                meta.get("page_start")
             )
+        logger.info("=" * 80)
 
         # ── Channel B: BM25 sparse retrieval ─────────────────────────
         bm25_ranked: list[dict[str, Any]] = []

@@ -11,7 +11,13 @@ from backend.services.prompt_builder import PromptBuilder
 from backend.config import GEMINI_API_KEY_ENV, FALLBACK_ANSWER
 
 
+<<<<<<< HEAD
 GEMINI_MODEL = "gemini-2.0-flash"
+=======
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+FALLBACK_ANSWER = "The retrieved documents do not contain sufficient information to answer this question."
+>>>>>>> hackathon-final
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 load_dotenv(ENV_FILE)
@@ -106,6 +112,7 @@ class LLMService:
             logger.info("LLM generation skipped because no retrieved context was provided.")
             return self._fallback_response(clean_chunks)
 
+<<<<<<< HEAD
         parts = []
 
         parts = []
@@ -127,12 +134,71 @@ class LLMService:
             output_format,
             correction_instruction
         )
+=======
+        # 1. Classify the question
+        question_type = self._classify_question(clean_question)
+
+        # 3. Score and sort chunks
+        sorted_chunks = sorted(
+        clean_chunks,
+        key=lambda x: x.get("score", 0),
+        reverse=True
+        )
+
+        # 4. Merge similar chunks
+        merged_chunks = self._merge_similar_chunks(sorted_chunks)
+
+        # 5. Limit context to the most relevant sections
+        final_chunks = merged_chunks[:8]
+
+        logger.info("=" * 80)
+        logger.info("FINAL CHUNKS SENT TO GEMINI")
+
+        for i, chunk in enumerate(final_chunks):
+            logger.info(
+                "[%d] %s | score=%.4f | %s",
+                i + 1,
+                chunk.get("metadata", {}).get("source", chunk.get("document_id")),
+                chunk.get("score", 0),
+                chunk.get("text", "")[:150].replace("\n", " ")
+            )
+
+        logger.info("=" * 80)
+
+        prompt = self._build_prompt(clean_question, final_chunks)
+        print("\n" + "=" * 120)
+        print("🟢 QUESTION")
+        print(clean_question)
+
+        print("\n" + "=" * 120)
+        print("🟢 QUESTION TYPE")
+        print(question_type)
+
+        print("\n" + "=" * 120)
+        print(f"🟢 FINAL CHUNKS ({len(final_chunks)})")
+
+        for i, chunk in enumerate(final_chunks, start=1):
+            print(f"\n----- CHUNK {i} -----")
+            print("Chunk ID :", chunk.get("chunk_id"))
+            print("Document :", chunk.get("document_id"))
+            print("Pages    :", chunk.get("page_start"), "-", chunk.get("page_end"))
+            print("Score    :", chunk.get("score"))
+
+            print("\nTEXT:\n")
+            print(chunk.get("text"))
+
+        print("\n" + "=" * 120)
+        print("🟢 PROMPT SENT TO GEMINI")
+        print(prompt)
+        print("=" * 120 + "\n")
+>>>>>>> hackathon-final
         started_at = perf_counter()
 
         import time
         from google.genai import types
         from google.genai.errors import APIError
 
+<<<<<<< HEAD
         max_retries = 3
         backoff_seconds = 2
 
@@ -189,9 +255,36 @@ class LLMService:
         answer = answer.replace("Document:", "")
         answer = answer.replace("Section:", "")
         answer = answer.replace("Chunk ID:", "")
+=======
+            logger.info("=" * 80)
+            logger.info("PROMPT SENT TO GEMINI")
+            logger.info(prompt)
+
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=1200,
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Gemini generation failed, returning grounded fallback: %s",
+                exc,
+            )
+            return self._build_contextual_fallback(clean_question, final_chunks)
+
+        answer = self._extract_text(response)
+        print("\n" + "=" * 120)
+        print("🟢 GEMINI RESPONSE")
+        print(answer)
+        print("=" * 120 + "\n")
+
+>>>>>>> hackathon-final
         if not answer:
             logger.warning("Gemini returned an empty answer; using contextual fallback.")
-            return self._build_contextual_fallback(clean_question, clean_chunks)
+            return self._build_contextual_fallback(clean_question, final_chunks)
 
         char_count = len(answer)
         word_count = len(answer.split())
@@ -203,21 +296,21 @@ class LLMService:
         logger.info(
             "LLM generation completed: model=%s context_chunks=%s latency_ms=%s",
             self.model,
-            len(clean_chunks),
+            len(final_chunks),
             int((perf_counter() - started_at) * 1000),
         )
 
         return {
             "answer": answer,
             "model": self.model,
-            "context_chunks": len(clean_chunks),
+            "context_chunks": len(final_chunks),
             "sources": [
                 {
                     "chunk_id": c.get("chunk_id"),
                     "page_start": c.get("page_start"),
                     "page_end": c.get("page_end"),
                 }
-                for c in clean_chunks
+                for c in final_chunks
             ],
             "success": True,
         }
@@ -255,6 +348,7 @@ class LLMService:
 
         return clean_chunks
 
+<<<<<<< HEAD
 
 
     @staticmethod
@@ -275,6 +369,150 @@ class LLMService:
         clean_text = re.sub(r'\[source:[^\]]+\]', '', clean_text, flags=re.IGNORECASE)
     
         return f"PASSAGE {index}\n\n{clean_text}"
+=======
+    @staticmethod
+    def _classify_question(question: str) -> str:
+        """Classify the user question into one of the supported types."""
+        q_lower = question.lower()
+        if any(term in q_lower for term in ["what is", "define", "definition", "meaning of"]):
+            return "Definition"
+        if any(term in q_lower for term in ["stand for", "full form", "acronym"]):
+            return "Full Form"
+        if any(term in q_lower for term in ["summarize", "summary"]):
+            return "Summary"
+        if any(term in q_lower for term in ["problem statement", "objective"]):
+            return "Problem Statement"
+        if any(term in q_lower for term in ["compare", "difference", "vs"]):
+            return "Comparison"
+        if any(term in q_lower for term in ["algorithm", "procedure", "how to", "implement"]):
+            return "Implementation"
+        if any(term in q_lower for term in ["security property"]):
+            return "Security Property"
+        if any(term in q_lower for term in ["protocol"]):
+            return "Protocol"
+        return "Explanation"
+
+    @staticmethod
+    def _merge_similar_chunks(chunks: list[dict]) -> list[dict]:
+        """Merge multiple chunks defining the same concept to prevent redundancy."""
+        merged_chunks = []
+        seen_terms_sets = []
+
+        for chunk in chunks:
+            text = chunk.get("text", "")
+            if not text:
+                continue
+
+            terms = set(re.findall(r"[a-z0-9]+", text.lower()))
+            if not terms:
+                continue
+
+            is_duplicate = False
+            for seen_terms in seen_terms_sets:
+                overlap = len(terms & seen_terms)
+                # Use a high threshold (90%) because stop words will artificially inflate overlap
+                if overlap > 0.90 * len(terms) or overlap > 0.90 * len(seen_terms):
+                    is_duplicate = True
+                    break
+
+            if not is_duplicate:
+                merged_chunks.append(chunk)
+                seen_terms_sets.append(terms)
+
+        return merged_chunks
+
+    @staticmethod
+    def _build_prompt(question: str, retrieved_chunks: list[dict]) -> str:
+        """Build the grounded RAG prompt sent to Gemini."""
+
+        context = "\n\n".join(
+            LLMService._format_context_chunk(index, chunk)
+            for index, chunk in enumerate(retrieved_chunks, start=1)
+        )
+        return f"""You are an Industrial Knowledge Assistant.
+
+You MUST answer ONLY using the retrieved context below.
+
+Instructions:
+
+- Carefully read ALL retrieved passages before answering.
+- Choose the passage(s) that best answer the user's question.
+- Combine information from multiple passages if necessary.
+- Never assume information that is not present in the retrieved context.
+- Never copy large paragraphs verbatim.
+- Ignore document metadata such as:
+  • Author names
+  • Copyright notices
+  • DOI numbers
+  • Publication notes
+  • References
+  • Figure captions
+unless the user explicitly asks for them.
+
+Formatting Rules:
+
+• Definition questions:
+Start with a one-sentence definition followed by a short explanation.
+
+• Explanation questions:
+Use short paragraphs or bullet points.
+
+• List questions:
+Return a bullet list.
+
+• Procedure questions:
+Return numbered steps.
+
+• Comparison questions:
+Return a markdown table.
+
+• Summary questions:
+Return 4-8 concise bullet points.
+
+If the answer is not present anywhere in the retrieved passages, reply ONLY with:
+
+"{FALLBACK_ANSWER}"
+
+----------------------------
+USER QUESTION
+----------------------------
+
+{question}
+
+----------------------------
+RETRIEVED PASSAGES
+----------------------------
+
+{context}
+
+----------------------------
+FINAL ANSWER
+----------------------------
+"""
+
+    @staticmethod
+    def _format_context_chunk(index: int, chunk: dict) -> str:
+        """Format one retrieved chunk."""
+
+        text = str(chunk.get("text", "")).strip()
+        page_start = chunk.get("page_start", "?")
+        page_end = chunk.get("page_end", page_start)
+
+        if page_start == page_end:
+            page_info = f"Page {page_start}"
+        else:
+            page_info = f"Pages {page_start}-{page_end}"
+
+        return f"""
+        ==============================
+        PASSAGE {index}
+        Source: {chunk.get("document_id", "Unknown")}
+        {page_info}
+        ==============================
+
+        {text}
+        """
+>>>>>>> hackathon-final
 
     def _fallback_response(self, retrieved_chunks: list[dict] | None = None) -> dict:
         """Return the standard grounded fallback without calling the model."""
@@ -303,8 +541,12 @@ class LLMService:
         )
         best_chunk = ranked_chunks[0]
         excerpt = self._make_excerpt(best_chunk)
+<<<<<<< HEAD
         citation = self._citation_for_chunk(best_chunk)
         answer = f"{excerpt}{citation}".strip()
+=======
+        answer = excerpt
+>>>>>>> hackathon-final
 
         return {
             "answer": answer,

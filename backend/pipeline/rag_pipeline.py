@@ -294,7 +294,49 @@ class RAGPipeline:
                 warning = f"[SYSTEM WARNING: The retrieved context does NOT contain information about {missing}. Acknowledge this limitation in your response.]\n\n"
                 constructed_context[0]["text"] = warning + constructed_context[0]["text"]
 
+<<<<<<< HEAD
         # ── Stage 6: Generate answer with Self-Correction ────────────
+=======
+            logger.info(
+                "Reranking completed: candidates=%d final=%d",
+                len(retrieved_chunks),
+                len(top_candidates),
+            )
+            logger.info("=" * 80)
+            logger.info("--- CHUNKS IMMEDIATELY AFTER RERANKING ---")
+            top_ids = {c.get("chunk_id") for c in top_candidates}
+            for chunk in retrieved_chunks:
+                cid = chunk.get("chunk_id")
+                meta = chunk.get("metadata", {})
+                is_discarded = cid not in top_ids
+                logger.info(
+                    "Reranked Chunk | chunk_id: %s | document_id: %s | filename: %s | similarity_distance: %s | rerank_score: %s | discarded: %s",
+                    cid,
+                    meta.get("document_id"),
+                    meta.get("filename"),
+                    chunk.get("distance"),
+                    meta.get("reranker_score"),
+                    is_discarded
+                )
+            logger.info("=" * 80)
+            retrieved_chunks = top_candidates
+
+        # ── Stage 3: MMR Diversification ─────────────────────────────
+        if getattr(config, "ENABLE_MMR", True) and len(retrieved_chunks) > clean_top_k:
+            mmr_lambda = getattr(config, "MMR_LAMBDA", 0.7)
+            retrieved_chunks = self._apply_mmr(
+                retrieved_chunks,
+                lambda_param=mmr_lambda,
+                top_k=clean_top_k,
+            )
+            logger.info("MMR diversification: selected %d chunks", len(retrieved_chunks))
+
+        # ── Stage 4: Context cleanup ─────────────────────────────────
+        cleaned_chunks = self._cleanup_context(retrieved_chunks)
+        retrieval["results"] = cleaned_chunks
+
+        # ── Stage 5: Generate answer ─────────────────────────────────
+>>>>>>> hackathon-final
         try:
             generation_started_at = perf_counter()
             max_retries = 1

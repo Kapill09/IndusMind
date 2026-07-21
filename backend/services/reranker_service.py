@@ -101,12 +101,28 @@ class RerankerService:
         # Attach scores and filter
         filtered = []
         for i, chunk in enumerate(chunks):
+<<<<<<< HEAD
             score = float(scores[i])
             chunk["score"] = round(score, 4)
             chunk.setdefault("metadata", {})["reranker_score"] = round(score, 4)
             
             if score >= self.min_score:
                 filtered.append(chunk)
+=======
+            metadata = chunk.setdefault("metadata", {})
+            reranker_score = float(scores[i])
+            metadata["reranker_score"] = round(reranker_score, 4)
+            chunk["score"] = round(reranker_score, 4)
+            print("\n===== RERANK RESULTS =====")
+
+            for c in sorted(chunks, key=lambda x: x["score"], reverse=True):
+
+                print(c["score"])
+
+                print(c["text"][:250])
+
+                print("-"*60)
+>>>>>>> hackathon-final
 
         if not filtered:
             logger.warning("All %d chunks scored below minimum threshold %.2f", len(chunks), self.min_score)
@@ -117,6 +133,7 @@ class RerankerService:
         else:
             filtered.sort(key=lambda x: x["score"], reverse=True)
 
+<<<<<<< HEAD
         # Remove near-duplicates (>80% text overlap)
         deduped = self._remove_near_duplicates(filtered)
         final_results = deduped[:top_k]
@@ -130,13 +147,59 @@ class RerankerService:
             print(f"[RAG DEBUG] Cross Encoder Score: {chunk.get('score')}")
             print(f"[RAG DEBUG] Ranking: {i + 1}")
         print("[RAG DEBUG] ====================================================\n")
+=======
+        for chunk in chunks:
+            metadata = chunk.get("metadata", {})
+            structured_score = float(metadata.get("structured_score", 0.0) or 0.0)
+            if structured_score > 0.5:
+                structured_matches.append(chunk)
+            else:
+                regular_chunks.append(chunk)
+
+        # Sort each group by cross-encoder score (genuine relevance)
+        structured_matches.sort(key=lambda x: x["score"], reverse=True)
+        regular_chunks.sort(key=lambda x: x["score"], reverse=True)
+
+        # Apply minimum score threshold to regular chunks
+        # regular_chunks = [c for c in regular_chunks if c["score"] >= self._min_score]
+        # TEMPORARY
+        logger.info("Skipping minimum score filtering.")
+
+        regular_chunks = regular_chunks
+
+        # Build final list: guaranteed slots for structured matches, then fill from regular
+        final: list[dict[str, Any]] = []
+        guaranteed_count = min(self._guaranteed_slots, len(structured_matches))
+
+        # Add guaranteed structured matches
+        for chunk in structured_matches[:guaranteed_count]:
+            final.append(chunk)
+
+        # Fill remaining slots from regular chunks (and any remaining structured matches)
+        remaining_pool = structured_matches[guaranteed_count:] + regular_chunks
+        
+        logger.info("Structured matches = %d", len(structured_matches))
+        logger.info("Regular chunks = %d", len(regular_chunks))
+        logger.info("Remaining pool = %d", len(remaining_pool))
+
+        remaining_pool.sort(key=lambda x: x["score"], reverse=True)
+
+        for chunk in remaining_pool:
+            if len(final) >= top_k:
+                break
+            if chunk["chunk_id"] not in {c["chunk_id"] for c in final}:
+                final.append(chunk)
+            logger.info("Current final size = %d", len(final))
+>>>>>>> hackathon-final
 
         logger.info(
             "Reranker: scored=%d above_thresh=%d deduped=%d top_score=%.2f", 
             len(chunks), len(filtered), len(deduped), 
             deduped[0]["score"] if deduped else 0.0
         )
+        logger.info("FINAL CHUNKS")
 
+<<<<<<< HEAD
         return final_results
 
     def _remove_near_duplicates(
@@ -165,3 +228,12 @@ class RerankerService:
                 result.append(chunk)
                 
         return result
+=======
+        for c in final:
+            logger.info(
+                "%s | %.4f",
+                c["chunk_id"],
+                c["score"]
+            )
+        return final
+>>>>>>> hackathon-final

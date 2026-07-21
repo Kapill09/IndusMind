@@ -155,6 +155,11 @@ async def ask_question(request: AskRequest):
         emb = pipeline.retrieval_service.embedding_service
         
         sanitized_document_ids = sanitize_document_ids(request.document_ids)
+        logger.info("=" * 80)
+        logger.info("USER QUESTION: %s", request.question)
+        logger.info("RAW DOCUMENT IDS: %s", request.document_ids)
+        logger.info("SANITIZED DOCUMENT IDS: %s", sanitized_document_ids)
+        logger.info("=" * 80)
         q_emb = emb.generate_embedding(request.question)
         
         print("\n======== FASTAPI ========")

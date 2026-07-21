@@ -1,8 +1,9 @@
 """Production-grade hybrid retrieval for INDUS MIND.
 
-Executes search queries across three independent retrieval channels 
-(dense vector, BM25 sparse, and structured metadata) according to the
-RetrievalStrategy defined in the QueryPlan.
+Combines three independent retrieval channels — dense vector search, BM25
+sparse retrieval, and structured metadata matching — and fuses them using
+Reciprocal Rank Fusion (RRF).  Source filtering is enforced as a hard
+invariant via the ScopeEnforcer.
 """
 
 from transformers.models.chameleon import image_processing_chameleon_fast
@@ -22,30 +23,43 @@ from transformers.models.chameleon import image_processing_chameleon_fast
 from backend.services import query_analyzer
 import logging
 import re
-from typing import Any, TypedDict
+from typing import Any, Iterable, TypedDict
 
-import backend.config as config
 from backend.services.bm25_service import BM25Service
-from backend.services.document_selector import DocumentSelection
-from backend.services.embedding_service import EmbeddingService
-from backend.services.query_understanding import QueryIntent, QueryPlan, RetrievalStrategy
-from backend.services.vectordb_service import VectorDBService
-from backend.services.query_expander import SearchQuery
+from backend.services.document_id_validation import sanitize_document_ids
+from backend.services.embedding_service import EmbeddingService, EmbeddingServiceError
+from backend.services.query_analyzer import (
+    AnalyzedQuery,
+    QueryAnalyzer,
+    QueryIntent,
+    StructuredQuery,
+)
+from backend.services.scope_enforcer import ScopeEnforcer
+from backend.services.vectordb_service import (
+    VectorDBService,
+    VectorDBServiceError,
+    VectorSearchResult,
+)
+import backend.config as config
 
 logger = logging.getLogger(__name__)
 
+# ── Configuration ─────────────────────────────────────────────────────
 RRF_K = getattr(config, "RRF_K", 60)
 MAX_SEMANTIC_CANDIDATES = getattr(config, "MAX_SEMANTIC_CANDIDATES", 50)
 BM25_TOP_K = getattr(config, "BM25_TOP_K", 50)
 
 STRUCTURED_METADATA_FIELDS = {
-    "problem_solution_mapping": "problem_statement_number",
-    "structural_lookup": "problem_statement_number", # Default mapping, can be expanded
+    "problem_statement": "problem_statement_number",
+    "section": "section_number",
+    "chapter": "chapter_number",
+    "figure": "figure_number",
+    "table": "table_number",
 }
 
 
 class RetrievalResult(TypedDict):
-    """One hybrid retrieval result returned by the executor."""
+    """One hybrid retrieval result returned to API callers."""
 
     chunk_id: str
     text: str
@@ -56,33 +70,53 @@ class RetrievalResult(TypedDict):
     score: float
 
 
+class RetrievalResponse(TypedDict):
+    """Structured response returned for a retrieval request."""
+
+    question: str
+    results: list[RetrievalResult]
+    intent: str
+
+
 class RetrievalServiceError(Exception):
     """Base exception for all retrieval service errors."""
 
 
-class HybridRetrievalExecutor:
-    """Execute search queries across channels with strategy-aware orchestration."""
+class RetrievalValidationError(RetrievalServiceError):
+    """Raised when the retrieval request is invalid."""
+
+
+class RetrievalEmbeddingError(RetrievalServiceError):
+    """Raised when the question embedding cannot be generated."""
+
+
+class RetrievalSearchError(RetrievalServiceError):
+    """Raised when hybrid retrieval cannot be completed."""
+
+
+class RetrievalService:
+    """Retrieve relevant INDUS MIND document chunks with production-grade hybrid ranking.
+
+    Three-channel retrieval with Reciprocal Rank Fusion:
+    - Channel A: Dense vector search (embedding similarity)
+    - Channel B: BM25 sparse retrieval (lexical matching with IDF)
+    - Channel C: Structured metadata matching (exact navigation lookups)
+
+    Source filtering is enforced as a hard invariant at every stage.
+    """
 
     def __init__(
         self,
         embedding_service: EmbeddingService,
         vectordb_service: VectorDBService,
         bm25_service: BM25Service | None = None,
+        query_analyzer: QueryAnalyzer | None = None,
     ) -> None:
         self.embedding_service = embedding_service
         self.vectordb_service = vectordb_service
         self.bm25_service = bm25_service or BM25Service()
+        self.query_analyzer = query_analyzer or QueryAnalyzer()
 
-<<<<<<< HEAD
-    def execute(
-        self, query_plan: QueryPlan, user_role: str = "public"
-    ) -> list[RetrievalResult]:
-        """Execute the query plan and return fused candidates for non-multi-query strategies."""
-
-        strategy = query_plan.retrieval_strategy
-        scope = query_plan.document_selection
-        
-=======
     def retrieve(
     self,
     question: str,
@@ -113,131 +147,44 @@ class HybridRetrievalExecutor:
 
         # ── Stage 1: Query Analysis ──────────────────────────────────
         analyzed = self.query_analyzer.full_analyze(clean_question)
->>>>>>> hackathon-final
         logger.info(
-            "Executing retrieval: strategy=%s scope=%s queries=%d",
-            strategy.value,
-            scope.scope.value,
-            len(query_plan.search_queries),
+            "Query analyzed: intent=%s structured=%s sub_queries=%d hyde=%s",
+            analyzed.intent.value,
+            analyzed.structured is not None,
+            len(analyzed.sub_queries),
+            analyzed.hyde_passage is not None,
         )
 
-        if strategy == RetrievalStrategy.STRUCTURED:
-            return self._execute_structured(query_plan, scope, user_role)
+        # ── Stage 2: Setup scope enforcer ────────────────────────────
+        scope = ScopeEnforcer(clean_document_ids)
 
-        if strategy == RetrievalStrategy.EXHAUSTIVE:
-            return self._execute_exhaustive(query_plan, scope, user_role)
-
-        if not query_plan.search_queries:
-            return []
-            
-        return self.execute_query(
-            query_plan.search_queries[0],
-            query_plan.intent,
-            scope,
-            user_role,
-            query_plan=query_plan,
-        )
-
-    def execute_query(
-        self,
-        search_query: SearchQuery,
-        intent: QueryIntent,
-        scope: DocumentSelection,
-        user_role: str,
-        query_plan: QueryPlan | None = None,
-    ) -> list[RetrievalResult]:
-        """Standard hybrid retrieval for a single overarching query."""
-        
-        target_docs = scope.selected_ids
-        if search_query.target_document_id and not scope.is_strict:
-            target_docs = [search_query.target_document_id]
-            
-        where = self._build_where(target_docs, None, user_role)
-        dense_top_k, bm25_top_k, fusion_top_k = self._adaptive_top_k(intent, search_query.text, query_plan)
-
-        dense = self._dense_search(search_query.text, where, dense_top_k)
-        bm25 = self._bm25_search(search_query.text, target_docs, bm25_top_k)
-
-        fused = self._reciprocal_rank_fusion([dense, bm25], top_k=fusion_top_k)
-        
-        # Apply search query weight
-        for candidate in fused:
-            candidate["rrf_score"] = candidate.get("rrf_score", 0.0) * search_query.weight
-            # Annotate with target entity if present
-            if search_query.target_entity:
-                candidate["target_entity"] = search_query.target_entity
-                
-        return self._format_results(fused, intent)
-
-    # ── Strategy Implementations ──────────────────────────────────────
-
-    def _execute_exhaustive(
-        self, query_plan: QueryPlan, scope: DocumentSelection, user_role: str
-    ) -> list[RetrievalResult]:
-        """Search each document independently to ensure coverage."""
-        
-        if not scope.selected_ids or not query_plan.search_queries:
-            if not query_plan.search_queries:
-                return []
-            return self.execute_query(query_plan.search_queries[0], query_plan.intent, scope, user_role)
-
-        per_doc_results: list[dict[str, Any]] = []
-        per_doc_k = max(5, 30 // len(scope.selected_ids))
-        
-        search_query = query_plan.search_queries[0]
-
-        for doc_id in scope.selected_ids:
-            where = self._build_where([doc_id], None, user_role)
-            dense = self._dense_search(search_query.text, where, 15)
-            bm25 = self._bm25_search(search_query.text, [doc_id], 15)
-            
-            fused = self._reciprocal_rank_fusion([dense, bm25], top_k=per_doc_k)
-            per_doc_results.extend(fused)
-
-        per_doc_results.sort(key=lambda x: x.get("rrf_score", 0.0), reverse=True)
-        return self._format_results(per_doc_results, query_plan.intent)
-
-    def _execute_structured(
-        self, query_plan: QueryPlan, scope: DocumentSelection, user_role: str
-    ) -> list[RetrievalResult]:
-        """Metadata-only search for structured navigational queries."""
-        
-        results: list[dict[str, Any]] = []
-        field_name = STRUCTURED_METADATA_FIELDS.get(query_plan.intent.value)
-        
-        if field_name:
-            # Find the entity that matches the field name (e.g., problem_statement_number -> PROBLEM_STATEMENT)
-            # or just take the first structural entity.
-            target_entity = next(
-                (e for e in query_plan.entities if e.entity_type.value in field_name), 
-                None
+        # ── Stage 3: Structured fast-path for navigational queries ───
+        if analyzed.structured:
+            fast_results = self._structured_fast_path(
+                analyzed.structured, clean_document_ids, clean_top_k
             )
-            
-            if target_entity:
-                where = self._build_where(
-                    scope.selected_ids, 
-                    {field_name: target_entity.normalized},
-                    user_role
+            if fast_results:
+                safe_results = scope.enforce(fast_results)
+                logger.info(
+                    "Structured fast-path returned %d results (post-scope: %d)",
+                    len(fast_results), len(safe_results),
                 )
-                
-                try:
-                    chunks = self.vectordb_service.get_chunks(limit=20, where=where)
-                    for chunk in chunks:
-                        chunk["rrf_score"] = 1.0  
-                        chunk["structured_score"] = 1.0
-                        results.append(chunk)
-                except Exception as exc:
-                    logger.warning("Structured lookup failed: %s", exc)
+                return {
+                    "question": clean_question,
+                    "results": safe_results,
+                    "intent": analyzed.intent.value,
+                }
 
-        if not results and self._has_semantic_content(query_plan.original_query) and query_plan.search_queries:
-            logger.info("Structured lookup found 0 results, falling back to SINGLE strategy.")
-            return self.execute_query(query_plan.search_queries[0], query_plan.intent, scope, user_role)
+        # ── Stage 4: Multi-query or single-query retrieval ───────────
+        if analyzed.is_multi_query:
+            all_results = self._multi_query_retrieve(
+                analyzed, clean_document_ids, clean_top_k, scope
+            )
+        else:
+            all_results = self._single_query_retrieve(
+                analyzed, clean_document_ids, clean_top_k, scope
+            )
 
-<<<<<<< HEAD
-        return self._format_results(results, query_plan.intent)
-
-    # ── Fusion and Formatting ──────────────────────────────────────────
-=======
         # ── Final scope enforcement ──────────────────────────────────
         logger.info("--- TOP 10 RETRIEVED CHUNKS (Pre-Filter) ---")
         for i, res in enumerate(all_results[:10], start=1):
@@ -544,32 +491,39 @@ class HybridRetrievalExecutor:
         except Exception:
             logger.debug("Structured metadata search failed", exc_info=True)
             return []
->>>>>>> hackathon-final
 
     @staticmethod
     def _reciprocal_rank_fusion(
-        ranked_lists: list[list[dict[str, Any]]], top_k: int = 30
+        ranked_lists: list[list[dict[str, Any]]],
+        top_k: int = 30,
     ) -> list[dict[str, Any]]:
-        """Fuse multiple ranked lists using Reciprocal Rank Fusion."""
-        
+        """Fuse multiple ranked lists using Reciprocal Rank Fusion.
+
+        RRF_score(chunk) = Σ  1 / (k + rank_in_list_i)
+
+        This is parameter-free (k=60 is standard) and handles
+        heterogeneous score distributions gracefully.
+        """
+
+        # Accumulate RRF scores
         rrf_scores: dict[str, float] = {}
         chunk_data: dict[str, dict[str, Any]] = {}
 
         for ranked_list in ranked_lists:
             for rank, item in enumerate(ranked_list):
-                chunk_id = item.get("chunk_id")
+                chunk_id = item.get("chunk_id", "")
                 if not chunk_id:
                     continue
-                    
-                rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + (1.0 / (RRF_K + rank + 1))
+                rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + (
+                    1.0 / (RRF_K + rank + 1)
+                )
+                # Keep the richest metadata version
                 if chunk_id not in chunk_data:
                     chunk_data[chunk_id] = dict(item)
 
+        # Sort by RRF score
         sorted_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
 
-<<<<<<< HEAD
-        results = []
-=======
         logger.info("=" * 80)
         logger.info("RRF FINAL RANKING")
 
@@ -584,154 +538,50 @@ class HybridRetrievalExecutor:
     )
 
         results: list[dict[str, Any]] = []
->>>>>>> hackathon-final
         for chunk_id in sorted_ids[:top_k]:
             item = chunk_data[chunk_id]
             item["rrf_score"] = round(rrf_scores[chunk_id], 6)
             results.append(item)
 
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 6 - Reciprocal Rank Fusion")
-        dense_count = len(ranked_lists[0]) if len(ranked_lists) > 0 else 0
-        bm25_count = len(ranked_lists[1]) if len(ranked_lists) > 1 else 0
-        print(f"[RAG DEBUG] Dense Results Count: {dense_count}")
-        print(f"[RAG DEBUG] BM25 Count: {bm25_count}")
-        print(f"[RAG DEBUG] Final RRF Count: {len(results)}")
-        print("[RAG DEBUG] ====================================================\n")
-
         return results
 
-    def _format_results(self, chunks: list[dict[str, Any]], intent: QueryIntent) -> list[RetrievalResult]:
-        """Format the internal chunk representation for API output."""
-        
-        formatted: list[RetrievalResult] = []
-        for chunk in chunks:
-            metadata = dict(chunk.get("metadata", {}))
-            metadata["intent"] = intent.value
-            
-            # Preserve target entity if added
-            if "target_entity" in chunk:
-                metadata["target_entity"] = chunk["target_entity"]
-            
-            formatted.append({
-                "chunk_id": chunk.get("chunk_id", ""),
-                "text": chunk.get("text","").strip(),
+    def _format_fused_results(
+        self,
+        fused: list[dict[str, Any]],
+        analyzed: AnalyzedQuery,
+    ) -> list[RetrievalResult]:
+        """Convert RRF-fused results into the public RetrievalResult format."""
+
+        results: list[RetrievalResult] = []
+        for item in fused:
+            metadata = dict(item.get("metadata") or {})
+            metadata["retrieval_mode"] = "hybrid_rrf"
+            metadata["rrf_score"] = item.get("rrf_score", 0.0)
+            metadata["intent"] = analyzed.intent.value
+
+            if "bm25_score" in item:
+                metadata["bm25_score"] = item["bm25_score"]
+            if "structured_score" in item:
+                metadata["structured_score"] = item["structured_score"]
+
+            distance = item.get("distance")
+            rrf_score = item.get("rrf_score", 0.0)
+
+            results.append({
+                "chunk_id": item["chunk_id"],
+                "text": item.get("text", ""),
                 "page_start": self._metadata_int(metadata.get("page_start")),
                 "page_end": self._metadata_int(metadata.get("page_end")),
                 "metadata": metadata,
-                "distance": chunk.get("distance"),
-                "score": chunk.get("rrf_score", 0.0),
+                "distance": float(distance) if distance is not None else None,
+                "score": round(rrf_score, 4),
             })
-            
-        return formatted
 
-    # ── Search Channels ───────────────────────────────────────────────
+        return results
 
-    def _dense_search(self, query: str, where: dict[str, Any], top_k: int) -> list[dict[str, Any]]:
-        """Execute vector search."""
-        
-        print("\n======== CHROMA ========")
-        print(f"Applied where filter:\n{where}")
-        print("========================\n")
-
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 4 - Vector Search")
-        print("[RAG DEBUG] Embedding Search Started")
-
-        try:
-            query_embedding = self.embedding_service.generate_embedding(query, is_query=True)
-            results = self.vectordb_service.search(
-                query_embedding=query_embedding, top_k=top_k, where=where
-            )
-            results = sorted(
-            results,
-            key=lambda x: x.get("distance", 9999)
-            )
-            
-            print(f"[RAG DEBUG] Retrieved Chunk Count: {len(results)}")
-            for r in results:
-                meta = r.get("metadata", {})
-                print(f"[RAG DEBUG] Document ID: {meta.get('document_id')}")
-                print(f"[RAG DEBUG] Document Name: {meta.get('filename')}")
-                print(f"[RAG DEBUG] Chunk ID: {r.get('chunk_id')}")
-                print(f"[RAG DEBUG] Page Number: {meta.get('page_start')}")
-                print(f"[RAG DEBUG] Similarity Score: {r.get('distance')}")
-            print("[RAG DEBUG] ====================================================\n")
-
-            return [
-                {
-                    "chunk_id": r["chunk_id"],
-                    "text": r["text"],
-                    "metadata": r.get("metadata", {}),
-                    "distance": r.get("distance"),
-                }
-                for r in results
-            ]
-        except Exception as exc:
-            logger.warning("Dense search failed: %s", exc)
-            return []
-
-    def _bm25_search(self, query: str, document_ids: list[str], top_k: int) -> list[dict[str, Any]]:
-        """Execute sparse keyword search."""
-        
-        if not self.bm25_service or self.bm25_service.index_size == 0:
-            return []
-            
-        try:
-            results = self.bm25_service.search(query=query, top_k=top_k, document_ids=document_ids)
-            
-            print("\n[RAG DEBUG] ====================================================")
-            print("[RAG DEBUG] STEP 5 - BM25 Search")
-            print(f"[RAG DEBUG] Retrieved BM25 Count: {len(results)}")
-            print(f"[RAG DEBUG] Document IDs: {document_ids}")
-            print("[RAG DEBUG] ====================================================\n")
-
-            return [
-                {
-                    "chunk_id": r["chunk_id"],
-                    "text": r["text"],
-                    "metadata": r.get("metadata", {}),
-                    "bm25_score": r["score"],
-                }
-                for r in results
-            ]
-        except Exception as exc:
-            logger.warning("BM25 search failed: %s", exc)
-            return []
-
-    # ── Helpers ───────────────────────────────────────────────────────
+    # ── Validation helpers ────────────────────────────────────────────
 
     @staticmethod
-<<<<<<< HEAD
-    def _build_where(
-        document_ids: list[str] | None, 
-        additional_filters: dict[str, Any] | None,
-        user_role: str
-    ) -> dict[str, Any]:
-        """Build ChromaDB where clause with role and document constraints."""
-        
-        conditions = []
-        
-        if document_ids:
-            conditions.append({"document_id": {"$in": document_ids}})
-            
-        if additional_filters:
-            conditions.append(additional_filters)
-            
-        allowed_roles = ["public"]
-        if user_role == "engineer":
-            allowed_roles = ["public", "engineer"]
-        elif user_role == "admin":
-            allowed_roles = ["public", "engineer", "admin"]
-            
-        conditions.append({"access_level": {"$in": allowed_roles}})
-        
-        if not conditions:
-            return {}
-        if len(conditions) == 1:
-            return conditions[0]
-        return {"$and": conditions}
-=======
     def _validate_question(question: str) -> str:
         if not isinstance(question, str):
             raise RetrievalValidationError("Question must be a string.")
@@ -749,7 +599,6 @@ class HybridRetrievalExecutor:
         if top_k > 100:
             raise RetrievalValidationError("top_k cannot exceed 100.")
         return top_k
->>>>>>> hackathon-final
 
     @staticmethod
     def _metadata_int(value: Any) -> int | None:
@@ -761,34 +610,5 @@ class HybridRetrievalExecutor:
             return None
 
     @staticmethod
-    def _has_semantic_content(query: str) -> bool:
-        words = [w for w in query.split() if w.lower() not in {"problem", "statement", "page", "section", "chapter", "number", "no"}]
-        return len(words) > 1
-
-    @staticmethod
-    def _adaptive_top_k(intent: QueryIntent, query: str, query_plan: QueryPlan | None = None) -> tuple[int, int, int]:
-        lowered = query.lower()
-        if re.search(r"\b\d+\b|\bnumber\b|\bcount\b", lowered):
-            return 10, 10, 12
-
-        if intent == QueryIntent.COMPARISON or intent.value == "cross_document_comparison":
-            return 12, 10, 15
-
-        if intent == QueryIntent.SUMMARIZATION:
-            return 18, 18, 20
-
-        if intent == QueryIntent.DEFINITION:
-            return 8, 8, 10
-
-        if intent == QueryIntent.EXPLANATION:
-            return 10, 10, 12
-
-        if intent in (QueryIntent.PROCEDURE, QueryIntent.STEP_BY_STEP_GUIDE, QueryIntent.WORKFLOW, QueryIntent.TROUBLESHOOTING, QueryIntent.RECOMMENDATION):
-            return 6, 6, 8
-
-        if intent == QueryIntent.STRUCTURAL_LOOKUP:
-            return 3, 3, 4
-
-        return 5, 5, 6
-
-RetrievalService = HybridRetrievalExecutor
+    def _normalize_identifier(value: Any) -> str:
+        return str(value).strip().lower()

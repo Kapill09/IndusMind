@@ -1,19 +1,10 @@
-"""Enterprise Cross-Encoder Reranker for retrieved chunks.
-
-Provides strategy-aware reranking driven by the QueryPlan.
-Enforces strict minimum scores and near-duplicate removal.
-"""
-
 import logging
-import re
 from time import perf_counter
 from typing import Any
 
 from sentence_transformers import CrossEncoder
 
 import backend.config as config
-from backend.services.query_understanding import QueryIntent, QueryPlan, RetrievalStrategy
-from backend.services.entity_extractor import EntityType
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +14,15 @@ class RerankerServiceError(Exception):
 
 
 class RerankerService:
-    """Strategy-aware Cross-Encoder Reranker."""
+    """Enterprise Cross-Encoder Reranker for retrieved chunks.
+
+    Loads the cross-encoder model as a singleton and provides scoring
+    without breaking encapsulation of RetrievalService.
+
+    The reranker uses genuine cross-encoder relevance scores without
+    artificial boosts.  Structured metadata matches are handled via
+    guaranteed slots instead of score hacking.
+    """
 
     _instance = None
     _model = None
@@ -38,13 +37,13 @@ class RerankerService:
             self.model_name = model_name or getattr(
                 config, "RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-12-v2"
             )
-            # -4.0 is typical cutoff for ms-marco cross-encoder
-            self.min_score = getattr(config, "MIN_RERANKER_SCORE", -4.0)
+            self._min_score = getattr(config, "MIN_RERANKER_SCORE", -4.0)
+            self._guaranteed_slots = getattr(config, "RERANKER_GUARANTEED_STRUCTURED_SLOTS", 2)
             self._load_model()
             self._initialized = True
 
     def _load_model(self) -> None:
-        """Load the cross-encoder model as a singleton."""
+        """Load the cross-encoder model only once and cache it."""
         if RerankerService._model is None:
             logger.info("Loading Cross-Encoder model: %s", self.model_name)
             try:
@@ -60,55 +59,44 @@ class RerankerService:
                 ) from exc
 
     def rerank(
-        self,
-        question: str,
-        chunks: list[dict[str, Any]],
-        top_k: int = 8,
-        query_plan: QueryPlan | None = None,
+        self, question: str, chunks: list[dict[str, Any]], top_k: int = 8
     ) -> list[dict[str, Any]]:
-        """Rerank chunks based on the retrieval strategy."""
-        
+        """Rerank chunks using the cross-encoder with guaranteed slots for structured matches.
+
+        Architecture:
+        1. Score all chunks with the cross-encoder (genuine relevance)
+        2. Identify structured metadata matches (exact section/problem matches)
+        3. Reserve top N slots for structured matches (if they exist)
+        4. Fill remaining slots from cross-encoder ranking
+        5. Apply minimum score threshold to filter noise
+
+        Args:
+            question: The user question.
+            chunks: List of candidate chunks from hybrid retrieval.
+            top_k: Number of chunks to return.
+
+        Returns:
+            List of reranked and rescored chunks.
+        """
         if not chunks:
             return []
 
-        # ── Strategy 1: Structured Metadata ──────────────────────────────
-        if query_plan and query_plan.retrieval_strategy == RetrievalStrategy.STRUCTURED:
-            # Don't rerank structured results — metadata is authoritative
-            logger.info("Reranker: Bypassing cross-encoder for STRUCTURED strategy.")
-            return chunks[:top_k]
-
-        # ── Standard Reranking ───────────────────────────────
-        return self._rerank_standard(question, chunks, top_k)
-
-    def _rerank_standard(
-        self, question: str, chunks: list[dict[str, Any]], top_k: int
-    ) -> list[dict[str, Any]]:
-        """Standard cross-encoder scoring for a single query."""
-        
         pairs = [(question, str(chunk.get("text", ""))) for chunk in chunks]
 
         try:
-            started_at = perf_counter()
+            rerank_started_at = perf_counter()
             scores = RerankerService._model.predict(pairs)
-            logger.debug(
-                "Cross-Encoder scored %d chunks in %dms",
-                len(chunks), int((perf_counter() - started_at) * 1000),
+            logger.info(
+                "Cross-Encoder scoring completed in %dms for %d chunks",
+                int((perf_counter() - rerank_started_at) * 1000),
+                len(chunks),
             )
         except Exception:
-            logger.exception("Reranker prediction failed, returning original order.")
+            logger.exception("Reranker model prediction failed, falling back to original ordering.")
             return chunks[:top_k]
 
-        # Attach scores and filter
-        filtered = []
+        # Attach cross-encoder scores to chunks
         for i, chunk in enumerate(chunks):
-<<<<<<< HEAD
-            score = float(scores[i])
-            chunk["score"] = round(score, 4)
-            chunk.setdefault("metadata", {})["reranker_score"] = round(score, 4)
-            
-            if score >= self.min_score:
-                filtered.append(chunk)
-=======
             metadata = chunk.setdefault("metadata", {})
             reranker_score = float(scores[i])
             metadata["reranker_score"] = round(reranker_score, 4)
@@ -122,32 +110,11 @@ class RerankerService:
                 print(c["text"][:250])
 
                 print("-"*60)
->>>>>>> hackathon-final
 
-        if not filtered:
-            logger.warning("All %d chunks scored below minimum threshold %.2f", len(chunks), self.min_score)
-            # Fallback: keep top 2 so we don't completely fail, validator will catch garbage
-            for i, chunk in enumerate(chunks):
-                chunk["score"] = float(scores[i])
-            filtered = sorted(chunks, key=lambda x: x["score"], reverse=True)[:2]
-        else:
-            filtered.sort(key=lambda x: x["score"], reverse=True)
+        # Separate structured matches from regular results
+        structured_matches: list[dict[str, Any]] = []
+        regular_chunks: list[dict[str, Any]] = []
 
-<<<<<<< HEAD
-        # Remove near-duplicates (>80% text overlap)
-        deduped = self._remove_near_duplicates(filtered)
-        final_results = deduped[:top_k]
-        
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 7 - Cross Encoder")
-        for i, chunk in enumerate(final_results):
-            meta = chunk.get("metadata", {})
-            print(f"[RAG DEBUG] Chunk ID: {chunk.get('chunk_id')}")
-            print(f"[RAG DEBUG] Document: {meta.get('document_id')}")
-            print(f"[RAG DEBUG] Cross Encoder Score: {chunk.get('score')}")
-            print(f"[RAG DEBUG] Ranking: {i + 1}")
-        print("[RAG DEBUG] ====================================================\n")
-=======
         for chunk in chunks:
             metadata = chunk.get("metadata", {})
             structured_score = float(metadata.get("structured_score", 0.0) or 0.0)
@@ -190,45 +157,16 @@ class RerankerService:
             if chunk["chunk_id"] not in {c["chunk_id"] for c in final}:
                 final.append(chunk)
             logger.info("Current final size = %d", len(final))
->>>>>>> hackathon-final
 
         logger.info(
-            "Reranker: scored=%d above_thresh=%d deduped=%d top_score=%.2f", 
-            len(chunks), len(filtered), len(deduped), 
-            deduped[0]["score"] if deduped else 0.0
+            "Reranking completed: candidates=%d structured=%d guaranteed=%d final=%d",
+            len(chunks),
+            len(structured_matches),
+            guaranteed_count,
+            len(final),
         )
         logger.info("FINAL CHUNKS")
 
-<<<<<<< HEAD
-        return final_results
-
-    def _remove_near_duplicates(
-        self, chunks: list[dict[str, Any]], threshold: float = 0.8
-    ) -> list[dict[str, Any]]:
-        """Remove chunks with >threshold token overlap with a higher-ranked chunk."""
-        
-        result: list[dict[str, Any]] = []
-        
-        for chunk in chunks:
-            is_dup = False
-            chunk_tokens = set(re.findall(r'[a-z0-9]+', str(chunk.get("text", "")).lower()))
-            
-            for existing in result:
-                existing_tokens = set(re.findall(r'[a-z0-9]+', str(existing.get("text", "")).lower()))
-                if chunk_tokens and existing_tokens:
-                    intersection = len(chunk_tokens & existing_tokens)
-                    smaller = min(len(chunk_tokens), len(existing_tokens))
-                    
-                    # Prevent short title pages from being wrongly flagged as duplicates
-                    if smaller > 15 and (intersection / smaller) > threshold:
-                        is_dup = True
-                        break
-                        
-            if not is_dup:
-                result.append(chunk)
-                
-        return result
-=======
         for c in final:
             logger.info(
                 "%s | %.4f",
@@ -236,4 +174,3 @@ class RerankerService:
                 c["score"]
             )
         return final
->>>>>>> hackathon-final

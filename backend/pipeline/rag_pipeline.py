@@ -1,8 +1,8 @@
 """RAG pipeline orchestration for INDUS MIND.
 
-Coordinates the entire retrieval and generation process.
-This is the single authoritative answer path — all queries flow through
-RAGPipeline.ask().
+Coordinates retrieval, reranking, MMR diversification, context cleanup,
+and answer generation.  This is the single authoritative answer path —
+all queries flow through RAGPipeline.ask().
 """
 
 import logging
@@ -10,16 +10,14 @@ import re
 from time import perf_counter
 from typing import Any, TypedDict
 
-import backend.config as config
-from backend.services.context_constructor import ContextConstructor
-from backend.services.context_validator import ContextValidation, ContextValidator, ValidationVerdict
-from backend.services.embedding_service import EmbeddingService
+import numpy as np
+
 from backend.services.llm_service import LLMService, LLMServiceError
-from backend.services.query_understanding import QueryUnderstandingEngine
-from backend.services.reranker_service import RerankerService
-from backend.services.response_validator import ResponseValidator
 from backend.services.retrieval_service import RetrievalService, RetrievalServiceError
-from backend.services.semantic_cache_service import SemanticCacheService
+from backend.services.reranker_service import RerankerService
+from backend.services.embedding_service import EmbeddingService
+import backend.config as config
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +52,14 @@ _COMPILED_ENTITY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 class RAGEntity(TypedDict):
     """An industrial entity extracted from retrieved context."""
+
     label: str
     type: str
 
 
 class RAGSource(TypedDict):
     """Source metadata included in the final RAG response."""
+
     chunk_id: str
     text: str
     page_start: int | None
@@ -70,6 +70,7 @@ class RAGSource(TypedDict):
 
 class RAGResponse(TypedDict):
     """Unified response returned by the RAG pipeline."""
+
     question: str
     answer: str
     retrieval: dict[str, Any]
@@ -80,20 +81,20 @@ class RAGResponse(TypedDict):
     retrieval_scope: str
     confidence: int
     intent: str
-    output_format: str
     success: bool
-    rejection_reason: str | None
-    missing_entities: list[str] | None
 
 
 class RAGPipelineError(Exception):
     """Base exception for all RAG pipeline errors."""
 
+
 class RAGPipelineValidationError(RAGPipelineError):
     """Raised when a RAG request is invalid."""
 
+
 class RAGPipelineRetrievalError(RAGPipelineError):
     """Raised when semantic retrieval fails."""
+
 
 class RAGPipelineGenerationError(RAGPipelineError):
     """Raised when answer generation fails."""
@@ -102,8 +103,11 @@ class RAGPipelineGenerationError(RAGPipelineError):
 class RAGPipeline:
     """Orchestrate retrieval and answer generation for INDUS MIND.
 
-    Pipeline:
-    Query → Understand → Retrieve → Rerank → Construct → Validate → LLM → Confidence
+    Single authoritative answer path:
+    Query → Retrieval → Reranking → MMR → Context Cleanup → Generation → Confidence
+
+    The pipeline coordinates existing services only. It does not generate
+    embeddings directly, access ChromaDB, parse PDFs, or call Gemini directly.
     """
 
     def __init__(
@@ -114,189 +118,62 @@ class RAGPipeline:
     ) -> None:
         self.retrieval_service = retrieval_service
         self.llm_service = llm_service
+        # Embedding service needed for MMR similarity computation
         self.embedding_service = embedding_service
-        self.semantic_cache = SemanticCacheService(embedding_service) if embedding_service else None
-        
-        # New Architecture Services
-        self.query_understanding = QueryUnderstandingEngine()
-        self.context_constructor = ContextConstructor(vectordb_service=retrieval_service.vectordb_service)
-        self.context_validator = ContextValidator()
-        self.response_validator = ResponseValidator()
 
-    def ask(self, question: str, top_k: int = 5, document_ids: list[str] | None = None, user_role: str = "public") -> RAGResponse:
-        """Answer a user question using retrieved document context."""
+    def ask(self, question: str, top_k: int = 5, document_ids: list[str] | None = None) -> RAGResponse:
+        """Answer a user question using retrieved document context.
+
+        Pipeline stages:
+        1. Validate input
+        2. Retrieve candidates (hybrid RRF with BM25 + dense + structured)
+        3. Rerank with cross-encoder (if enabled)
+        4. Diversify with MMR (if enabled)
+        5. Cleanup and deduplicate context
+        6. Generate answer with Gemini
+        7. Compute grounded confidence score
+        """
 
         clean_question = self._validate_question(question)
         clean_top_k = self._validate_top_k(top_k)
         started_at = perf_counter()
 
-        logger.info(
-            "RAG Pipeline: request accepted. query='%s', document_ids=%s",
-            clean_question,
-            document_ids,
-        )
-
-        # ── Stage 0: Check Semantic Cache ────────────────────────────
-        if self.semantic_cache:
-            if document_ids:
-                print("\n[RAG DEBUG] ====================================================")
-                print("[RAG DEBUG] Semantic Cache: BYPASSED (document_ids provided)")
-                print("[RAG DEBUG] ====================================================\n")
-            else:
-                # We pass document_ids to the cache so it respects scoping
-                cached_response = self.semantic_cache.get(clean_question, document_ids)
-                if cached_response:
-                    print("\n[RAG DEBUG] ====================================================")
-                    print("[RAG DEBUG] Semantic Cache: HIT")
-                    print("[RAG DEBUG] Searching: N/A")
-                    print("[RAG DEBUG] Retrieved Chunks: 0")
-                    print("[RAG DEBUG] ====================================================\n")
-                    cached_response["retrieval_time_ms"] = int((perf_counter() - started_at) * 1000)
-                    return cached_response
-                else:
-                    print("\n[RAG DEBUG] ====================================================")
-                    print("[RAG DEBUG] Semantic Cache: MISS")
-                    print("[RAG DEBUG] ====================================================\n")
-
-        # ── Stage 1: Query Understanding ─────────────────────────────
-        query_plan = self.query_understanding.analyze(clean_question, document_ids)
-        print("\n====================================================")
-        print(f"[RAG EXHAUSTIVE LOG] STEP 2: QUERY UNDERSTANDING")
-        print(f"Detected Intent: {query_plan.intent.value if query_plan.intent else 'unknown'}")
-        print(f"Detected Entities: {[e.text for e in query_plan.entities]}")
-        print(f"Expanded Queries: {[sq.text for sq in query_plan.search_queries]}")
-        print(f"Document Filters: {query_plan.document_selection.selected_ids}")
-        print("====================================================\n")
-        
-        adaptive_top_k = self._resolve_adaptive_top_k(query_plan)
-        dynamic_top_k = max(clean_top_k, adaptive_top_k, getattr(query_plan, "num_retrievals", clean_top_k))
-
-        # ── Stage 2 & 3: Retrieval and Reranking ─────────────────────
+        # ── Stage 1: Retrieve candidates ─────────────────────────────
         try:
             retrieval_started_at = perf_counter()
-            retrieved_chunks = []
-            print("\n========== FINAL CHUNKS ==========")
 
-            for i, chunk in enumerate(retrieved_chunks[:10], 1):
-                meta = chunk.get("metadata", {})
-                print(
-                    f"{i}. "
-                    f"Page={meta.get('page_start')} | "
-                    f"Score={chunk.get('score')} | "
-                    f"{chunk.get('text','')[:120]}"
-                )
+            is_reranker_enabled = getattr(config, "ENABLE_RERANKER", True)
+            retrieval_top_k = getattr(config, "RERANK_TOP_N", 30) if is_reranker_enabled else clean_top_k
 
-            print("==================================\n")
-            
-            enable_reranker = getattr(config, "ENABLE_RERANKER", True)
-            reranker = RerankerService() if enable_reranker else None
-            final_top_k = max(getattr(config, "FINAL_TOP_K", dynamic_top_k), adaptive_top_k, dynamic_top_k)
-
-            if query_plan.is_multi_query and len(query_plan.search_queries) > 1:
-                logger.info("Executing multi-query independent retrieval for %d queries.", len(query_plan.search_queries))
-                
-                query_results = []
-                per_query_k = max(3, final_top_k // len(query_plan.search_queries))
-                
-                for sq in query_plan.search_queries:
-                    # 1. Retrieve independently
-                    cands = self.retrieval_service.execute_query(sq, query_plan.intent, query_plan.document_selection, user_role)
-                    
-                    # 2. Rerank independently against the specific sub-query
-                    if reranker and cands:
-                        cands = reranker.rerank(sq.text, cands, top_k=per_query_k, query_plan=query_plan)
-                        
-                    if cands:
-                        query_results.append(cands)
-                
-                # 3. Interleave independently retrieved and reranked results
-                if query_results:
-                    iters = [iter(g) for g in query_results]
-                    while iters and len(retrieved_chunks) < final_top_k:
-                        for it in list(iters):
-                            if len(retrieved_chunks) >= final_top_k:
-                                break
-                            try:
-                                retrieved_chunks.append(next(it))
-                            except StopIteration:
-                                iters.remove(it)
-            else:
-                # Standard single-pass retrieval and rerank
-                retrieved_chunks = self.retrieval_service.execute(query_plan, user_role)
-                if reranker and retrieved_chunks:
-                    retrieved_chunks = reranker.rerank(
-                        question=clean_question,
-                        chunks=retrieved_chunks,
-                        top_k=final_top_k,
-                        query_plan=query_plan
-                    )
-                    print("\n================ RETRIEVED CHUNKS ================")
-
-                for i, chunk in enumerate(retrieved_chunks, 1):
-                    meta = chunk.get("metadata", {})
-
-                    print(f"\nChunk {i}")
-                    print("Score:", chunk.get("score"))
-                    print("Document:", meta.get("filename"))
-                    print("Page:", meta.get("page_start"))
-                    print(chunk.get("text","")[:300])
-
-                    print("=================================================\n")
-
+            retrieval = self.retrieval_service.retrieve(
+                question=clean_question,
+                top_k=max(clean_top_k, retrieval_top_k),
+                document_ids=document_ids,
+            )
             logger.info(
-                "Retrieval & Reranking completed: strategy=%s final_chunks=%s latency_ms=%s",
-                query_plan.retrieval_strategy.value,
-                len(retrieved_chunks),
+                "RAG retrieval completed: top_k=%s results=%s intent=%s latency_ms=%s",
+                retrieval_top_k,
+                len(retrieval.get("results", [])),
+                retrieval.get("intent", "unknown"),
                 int((perf_counter() - retrieval_started_at) * 1000),
             )
         except RetrievalServiceError as exc:
             raise RAGPipelineRetrievalError("Failed to retrieve context for the question.") from exc
 
-        # ── Stage 4: Context Construction ────────────────────────────
-        max_tokens = getattr(config, "MAX_CONTEXT_TOKENS", 6000)
-        constructed_context = self.context_constructor.construct(
-            chunks=retrieved_chunks,
-            query_plan=query_plan,
-            max_tokens=max_tokens
-        )
-        
-        doc_ids = list(set([c.get("metadata", {}).get("document_id") for c in constructed_context if c.get("metadata", {}).get("document_id")]))
-        chunk_ids = [c.get("chunk_id") for c in constructed_context]
-        pages = list(set([c.get("metadata", {}).get("page_start") for c in constructed_context if c.get("metadata", {}).get("page_start")]))
-        chars = sum([len(c.get("text", "")) for c in constructed_context])
-        
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 8 - Final Context")
-        print(f"[RAG DEBUG] Chunks selected for Gemini: {len(constructed_context)}")
-        print(f"[RAG DEBUG] Document IDs: {doc_ids}")
-        print(f"[RAG DEBUG] Chunk IDs: {chunk_ids}")
-        print(f"[RAG DEBUG] Pages: {pages}")
-        print(f"[RAG DEBUG] Characters: {chars}")
-        print(f"[RAG DEBUG] Total Tokens: {chars // 4}")
-        print("[RAG DEBUG] ====================================================\n")
+        retrieved_chunks = retrieval.get("results", [])
+        intent = retrieval.get("intent", "factoid")
 
-        logger.info("Context construction yielded %d formatted chunks.", len(constructed_context))
+        # ── Stage 2: Cross-encoder reranking ─────────────────────────
+        if is_reranker_enabled and len(retrieved_chunks) > 0:
+            reranker = RerankerService()
+            final_top_k = getattr(config, "FINAL_TOP_K", clean_top_k)
 
-        # ── Stage 5: Context Validation ──────────────────────────────
-        validation = self.context_validator.validate(query_plan, constructed_context)
-        
-        if validation.verdict == ValidationVerdict.FAIL:
-            logger.warning(
-            "Context validation failed but continuing for debugging: %s",
-            validation.reason,
+            top_candidates = reranker.rerank(
+                question=retrieval["question"],
+                chunks=retrieved_chunks,
+                top_k=max(final_top_k, clean_top_k + 3),  # Over-retrieve slightly for MMR
             )
-            
-        if validation.verdict == ValidationVerdict.PARTIAL:
-            logger.warning("Retrieval PARTIAL: %s. Proceeding to LLM with warning.", validation.reason)
-            # Add warning to the first chunk
-            if constructed_context:
-                missing = ", ".join(validation.missing_entities)
-                warning = f"[SYSTEM WARNING: The retrieved context does NOT contain information about {missing}. Acknowledge this limitation in your response.]\n\n"
-                constructed_context[0]["text"] = warning + constructed_context[0]["text"]
 
-<<<<<<< HEAD
-        # ── Stage 6: Generate answer with Self-Correction ────────────
-=======
             logger.info(
                 "Reranking completed: candidates=%d final=%d",
                 len(retrieved_chunks),
@@ -336,166 +213,138 @@ class RAGPipeline:
         retrieval["results"] = cleaned_chunks
 
         # ── Stage 5: Generate answer ─────────────────────────────────
->>>>>>> hackathon-final
         try:
             generation_started_at = perf_counter()
-            max_retries = 1
-            attempts = 0
-            correction_instruction = None
-            llm_response = None
-            answer_text = ""
-            best_answer_text = ""
-            
-            while attempts <= max_retries:
-                attempts += 1
-                
-                print("\n[RAG DEBUG] ====================================================")
-                print("[RAG DEBUG] STEP 9 - Gemini Request")
-                print(f"[RAG DEBUG] Prompt Length: {len(clean_question)}")
-                print(f"[RAG DEBUG] Context Length: {chars}")
-                print(f"[RAG DEBUG] Documents Used: {len(doc_ids)}")
-                print("[RAG DEBUG] ====================================================\n")
-                
-                llm_response = self.llm_service.generate_answer(
-                    question=clean_question,
-                    retrieved_chunks=constructed_context,
-                    intent=query_plan.intent.value,
-                    output_format=query_plan.output_format,
-                    correction_instruction=correction_instruction
-                )
-                
-                answer_text = str(llm_response.get("answer", ""))
-                
-                if not answer_text.strip():
-                    correction_instruction = "Return a complete answer with structured sections and no empty output."
-                else:
-                    val_result = self.response_validator.validate(answer_text, query_plan, constructed_context)
-                    if val_result.is_valid:
-                        logger.info("Response Validation PASSED on attempt %d.", attempts)
-                        best_answer_text = answer_text
-                        break
-
-                    logger.warning(
-                        "Response Validation FAILED on attempt %d. Reason: %s",
-                        attempts, val_result.reason
-                    )
-                    correction_instruction = val_result.reason
-                    
-                    # Capture the first generated answer as a fallback in case all retries fail,
-                    # but prefer any answer that gets closer to passing validation if possible.
-                    if not best_answer_text:
-                        best_answer_text = answer_text
-
-
-                if attempts <= max_retries:
-                    continue
-
-                logger.error("Response Validation max retries reached. Returning best effort answer.")
-
-            # Always use the best answer (first valid generation), never the last
-            # corrupted retry that may contain validator meta-language.
-            answer_text = best_answer_text or answer_text
-            
+            llm_response = self.llm_service.generate_answer(
+                question=retrieval["question"],
+                retrieved_chunks=cleaned_chunks,
+            )
             logger.info(
-                "RAG generation completed: attempts=%d latency_ms=%s",
-                attempts,
+                "RAG generation completed: context_chunks=%s latency_ms=%s",
+                len(cleaned_chunks),
                 int((perf_counter() - generation_started_at) * 1000),
             )
         except LLMServiceError as exc:
             raise RAGPipelineGenerationError("Failed to generate an answer from retrieved context.") from exc
 
-        if not answer_text.strip():
-            answer_text = self._build_fallback_answer(clean_question, constructed_context)
-            llm_response["answer"] = answer_text
-
-        # ── Stage 7: Compute grounded confidence ─────────────────────
+        # ── Stage 6: Compute grounded confidence ─────────────────────
         confidence = self._compute_confidence(
             question=clean_question,
-            answer=answer_text,
-            chunks=constructed_context,
-            validation=validation,
+            answer=str(llm_response.get("answer", "")),
+            chunks=cleaned_chunks,
+            intent=intent,
         )
 
         logger.info(
-            "RAG request completed: confidence=%d total_latency_ms=%s",
+            "RAG request completed: top_k=%s confidence=%d total_latency_ms=%s",
+            clean_top_k,
             confidence,
             int((perf_counter() - started_at) * 1000),
         )
 
-        prompt_tokens = max(1, int((len(clean_question) + sum(len(str(c.get("text", ""))) for c in constructed_context)) / 4))
-        completion_tokens = max(1, int(len(answer_text) / 4))
-        logger.info(
-            "RAG telemetry intent=%s entities=%s expanded_queries=%d retrieved_chunks=%d bm25_count=%d dense_count=%d fusion_count=%d compressed_count=%d prompt_tokens=%d completion_tokens=%d generation_time_ms=%d validation_status=%s retry_count=%d",
-            query_plan.intent.value,
-            ",".join(entity.text for entity in query_plan.entities[:5]),
-            len(query_plan.search_queries),
-            len(retrieved_chunks),
-            max(0, len(retrieved_chunks) // 2),
-            max(0, len(retrieved_chunks) // 2),
-            len(constructed_context),
-            len(constructed_context),
-            prompt_tokens,
-            completion_tokens,
-            int((perf_counter() - generation_started_at) * 1000),
-            "passed" if val_result.is_valid else "failed",
-            max(0, attempts - 1),
-        )
+        retrieval_scope = self._build_retrieval_scope(document_ids, cleaned_chunks)
 
-        final_response = {
-            "question": clean_question,
-            "answer": answer_text,
-            "retrieval": {"results": constructed_context, "intent": query_plan.intent.value},
-            "model": str(llm_response["model"]),
-            "context_chunks": len(constructed_context),
-            "sources": self._build_sources(constructed_context),
-            "entities": self._extract_entities(constructed_context),
-            "retrieval_scope": self._build_retrieval_scope(query_plan.document_selection.selected_ids, constructed_context),
-            "confidence": confidence,
-            "intent": query_plan.intent.value,
-            "output_format": query_plan.output_format,
-            "success": True,
-            "rejection_reason": None,
-            "missing_entities": validation.missing_entities,
-        }
-
-        print("\n[RAG DEBUG] ====================================================")
-        print("[RAG DEBUG] STEP 10 - Final Response")
-        print(f"[RAG DEBUG] Grounded = {confidence > 50}")
-        print(f"[RAG DEBUG] Citations Used: {len(final_response['sources'])}")
-        print(f"[RAG DEBUG] Documents Referenced: {len(set([s.get('metadata', {}).get('document_id') for s in final_response['sources']]))}")
-        print("[RAG DEBUG] ====================================================\n")
-
-        if self.semantic_cache:
-            self.semantic_cache.set(clean_question, document_ids, final_response)
-
-        return final_response
-
-    def _build_rejection_response(
-        self, question: str, started_at: float, validation: ContextValidation
-    ) -> RAGResponse:
-        """Return structured rejection with diagnostic info."""
-        
-        if validation.missing_entities:
-            entities = ", ".join(validation.missing_entities)
-            answer = f"I couldn't find sufficient information about {entities} in the selected documents. Try selecting more documents or rephrasing your question."
-        else:
-            answer = "I do not have sufficient evidence in the selected documents to answer this question accurately."
-            
         return {
-            "question": question,
-            "answer": answer,
-            "retrieval": {"results": [], "intent": "unknown"},
-            "model": "system-rejection",
-            "context_chunks": 0,
-            "sources": [],
-            "entities": [],
-            "retrieval_scope": "N/A",
-            "confidence": 0,
-            "intent": "unknown",
-            "success": False,
-            "rejection_reason": validation.reason,
-            "missing_entities": validation.missing_entities,
+            "question": retrieval["question"],
+            "answer": str(llm_response["answer"]),
+            "retrieval": retrieval,
+            "model": str(llm_response["model"]),
+            "context_chunks": len(cleaned_chunks),
+            "sources": self._build_sources(cleaned_chunks),
+            "entities": self._extract_entities(cleaned_chunks),
+            "retrieval_scope": retrieval_scope,
+            "confidence": confidence,
+            "intent": intent,
+            "success": True,
         }
+
+    # ── MMR Diversification ──────────────────────────────────────────
+
+    def _apply_mmr(
+        self,
+        chunks: list[dict[str, Any]],
+        lambda_param: float = 0.7,
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Apply Maximal Marginal Relevance to diversify the result set.
+
+        MMR_score(chunk) = λ * relevance(chunk) - (1-λ) * max_sim(chunk, selected)
+
+        Uses text-based similarity as a fallback when embeddings are unavailable.
+        """
+
+        if len(chunks) <= top_k:
+            return chunks
+
+        # Compute chunk-chunk similarity matrix using text overlap
+        # (cheaper than re-embedding all chunks)
+        n = len(chunks)
+        similarity_matrix = self._compute_text_similarity_matrix(chunks)
+
+        # Normalize relevance scores to [0, 1]
+        scores = [float(c.get("score", 0.0) or 0.0) for c in chunks]
+        max_score = max(scores) if scores else 1.0
+        if max_score > 0:
+            norm_scores = [s / max_score for s in scores]
+        else:
+            norm_scores = [0.0] * n
+
+        # Greedy MMR selection
+        selected_indices: list[int] = []
+        remaining = set(range(n))
+
+        for _ in range(min(top_k, n)):
+            best_idx = -1
+            best_mmr = float("-inf")
+
+            for idx in remaining:
+                relevance = norm_scores[idx]
+
+                if selected_indices:
+                    max_sim = max(
+                        similarity_matrix[idx][sel_idx]
+                        for sel_idx in selected_indices
+                    )
+                else:
+                    max_sim = 0.0
+
+                mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim
+
+                if mmr_score > best_mmr:
+                    best_mmr = mmr_score
+                    best_idx = idx
+
+            if best_idx >= 0:
+                selected_indices.append(best_idx)
+                remaining.discard(best_idx)
+
+        return [chunks[i] for i in selected_indices]
+
+    @staticmethod
+    def _compute_text_similarity_matrix(chunks: list[dict[str, Any]]) -> list[list[float]]:
+        """Compute pairwise text similarity using token Jaccard overlap."""
+
+        tokenized = []
+        for chunk in chunks:
+            text = str(chunk.get("text", "")).lower()
+            tokens = set(re.findall(r"[a-z0-9]+", text))
+            tokenized.append(tokens)
+
+        n = len(chunks)
+        matrix = [[0.0] * n for _ in range(n)]
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                if tokenized[i] and tokenized[j]:
+                    intersection = len(tokenized[i] & tokenized[j])
+                    union = len(tokenized[i] | tokenized[j])
+                    sim = intersection / union if union > 0 else 0.0
+                else:
+                    sim = 0.0
+                matrix[i][j] = sim
+                matrix[j][i] = sim
+
+        return matrix
 
     # ── Confidence Scoring ───────────────────────────────────────────
 
@@ -504,21 +353,39 @@ class RAGPipeline:
         question: str,
         answer: str,
         chunks: list[dict[str, Any]],
-        validation: ContextValidation,
+        intent: str,
     ) -> int:
-        """Compute a grounded confidence score (0-100) from retrieval and grounding evidence."""
+        """Compute a grounded confidence score (0-100).
+
+        Based on:
+        - Reranker score distribution (if available)
+        - Source diversity (unique documents)
+        - Answer-context overlap (does the answer use the context?)
+        - Retrieval signal strength
+        """
 
         if not chunks or not answer:
             return 15
 
-        best_score = max(validation.relevance_scores) if validation.relevance_scores else 0.0
-        score_component = max(0.0, min(1.0, (best_score + 5) / 15))
+        # Factor 1: Best retrieval score (reranker or RRF)
+        scores = []
+        for chunk in chunks:
+            meta = chunk.get("metadata", {})
+            reranker_score = meta.get("reranker_score")
+            if reranker_score is not None:
+                scores.append(float(reranker_score))
+            else:
+                scores.append(float(chunk.get("score", 0.0) or 0.0))
 
-        entity_coverage = 1.0
-        if validation.entity_coverage:
-            covered = sum(1 for v in validation.entity_coverage.values() if v)
-            entity_coverage = covered / len(validation.entity_coverage)
+        if scores:
+            best_score = max(scores)
+            # Cross-encoder scores typically range from -10 to +10
+            # Normalize to 0-1
+            score_component = max(0.0, min(1.0, (best_score + 5) / 15))
+        else:
+            score_component = 0.0
 
+        # Factor 2: Source diversity
         doc_ids = set()
         for chunk in chunks:
             doc_id = (chunk.get("metadata") or {}).get("document_id", "")
@@ -526,31 +393,37 @@ class RAGPipeline:
                 doc_ids.add(doc_id)
         diversity = min(1.0, len(doc_ids) / max(1, len(chunks)))
 
+        # Factor 3: Answer-context overlap
         answer_terms = set(re.findall(r"[a-z0-9]+", answer.lower()))
         context_terms = set()
         for chunk in chunks:
             context_terms.update(re.findall(r"[a-z0-9]+", str(chunk.get("text", "")).lower()))
+        if answer_terms:
+            overlap = len(answer_terms & context_terms) / len(answer_terms)
+        else:
+            overlap = 0.0
 
-        overlap = len(answer_terms & context_terms) / len(answer_terms) if answer_terms else 0.0
-        chunk_adequacy = min(1.0, len(chunks) / 4)
-        citation_coverage = min(1.0, len(chunks) / max(1, min(5, len(chunks))))
-        grounding_completeness = min(1.0, len(answer.split()) / 120.0)
+        # Factor 4: Chunk count adequacy
+        chunk_adequacy = min(1.0, len(chunks) / 3)
 
+        # Weighted combination
         confidence = (
-            0.25 * score_component
-            + 0.20 * entity_coverage
-            + 0.20 * overlap
+            0.40 * score_component
             + 0.15 * diversity
-            + 0.10 * chunk_adequacy
-            + 0.05 * citation_coverage
-            + 0.05 * grounding_completeness
+            + 0.30 * overlap
+            + 0.15 * chunk_adequacy
         )
 
-        if validation.missing_entities:
-            confidence *= 0.6
-        if best_score < -2.0:
-            confidence *= 0.5
+        # Boost for navigational queries with structured matches
+        if intent == "navigational":
+            has_structured = any(
+                (c.get("metadata") or {}).get("structured_score", 0) > 0.5
+                for c in chunks
+            )
+            if has_structured:
+                confidence = min(1.0, confidence + 0.15)
 
+        # Detect fallback answers
         fallback_phrases = [
             "couldn't find",
             "not enough",
@@ -562,29 +435,48 @@ class RAGPipeline:
 
         return int(round(min(100.0, max(0.0, confidence * 100))))
 
-    @staticmethod
-    def _resolve_adaptive_top_k(query_plan) -> int:
-        intent = getattr(query_plan, "intent", None)
-        if intent is None:
-            return 5
+    # ── Context Cleanup ──────────────────────────────────────────────
 
-        if intent.value == "comparison" or intent.value == "cross_document_comparison":
-            return 12
-        if intent.value == "summarization":
-            return 18
-        if intent.value == "definition":
-            return 4
-        if intent.value == "explanation":
-            return 6
-        if intent.value in {"procedure", "step_by_step_guide", "workflow", "troubleshooting", "recommendation"}:
-            return 6
-        if intent.value == "structural_lookup":
-            return 3
-        return 5
+    @staticmethod
+    def _cleanup_context(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Remove duplicate/overlapping chunks and merge consecutive ones."""
+        if not chunks:
+            return []
+
+        seen = set()
+        unique = []
+        for c in chunks:
+            if c["chunk_id"] not in seen:
+                seen.add(c["chunk_id"])
+                unique.append(c)
+
+        cleaned = []
+        for chunk in unique:
+            text = chunk.get("text", "").strip()
+            if not text:
+                continue
+
+            is_overlap = False
+            for existing in cleaned:
+                existing_text = existing.get("text", "")
+                if text in existing_text or existing_text in text:
+                    is_overlap = True
+                    # Keep the larger one
+                    if len(text) > len(existing_text):
+                        existing["text"] = text
+                        existing["chunk_id"] = chunk["chunk_id"]
+                    break
+            if not is_overlap:
+                cleaned.append(chunk)
+
+        return cleaned
+
+    # ── Source & Entity Building ──────────────────────────────────────
 
     @staticmethod
     def _build_sources(retrieved_chunks: list[dict[str, Any]]) -> list[RAGSource]:
-        """Build lightweight source metadata for the final response."""
+        """Extract source metadata from retrieved chunks for the final response."""
+
         sources: list[RAGSource] = []
         for chunk in retrieved_chunks:
             raw_text = str(chunk.get("text", "")).strip()
@@ -598,16 +490,8 @@ class RAGPipeline:
                     "metadata": dict(chunk.get("metadata") or {}),
                 }
             )
+
         return sources
-
-    @staticmethod
-    def _build_fallback_answer(question: str, chunks: list[dict[str, Any]]) -> str:
-        if not chunks:
-            return "The available evidence in the selected documents is insufficient to answer this request confidently."
-
-        best_chunk = max(chunks, key=lambda chunk: len(str(chunk.get("text", ""))))
-        excerpt = str(best_chunk.get("text", "")).strip().splitlines()[0][:240]
-        return f"Relevant evidence from the selected industrial documents indicates that {excerpt}."
 
     @staticmethod
     def _build_retrieval_scope(
@@ -615,6 +499,7 @@ class RAGPipeline:
         retrieved_chunks: list[dict[str, Any]],
     ) -> str:
         """Build a human-readable description of the retrieval scope."""
+
         if not document_ids:
             return "Entire Knowledge Base"
 
@@ -632,6 +517,7 @@ class RAGPipeline:
     @staticmethod
     def _extract_entities(retrieved_chunks: list[dict[str, Any]]) -> list[RAGEntity]:
         """Extract unique industrial entities from retrieved chunk text."""
+
         seen: set[str] = set()
         entities: list[RAGEntity] = []
         combined_text = " ".join(

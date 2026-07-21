@@ -1,3 +1,4 @@
+from openai import api_key
 import logging
 import os
 import re
@@ -6,11 +7,11 @@ from time import perf_counter
 from typing import Any
 
 from dotenv import load_dotenv
-from google import genai
+from groq import Groq
 
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
+GROQ_MODEL = "llama-3.3-70b-versatile"
 FALLBACK_ANSWER = "The retrieved documents do not contain sufficient information to answer this question."
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
@@ -53,26 +54,26 @@ class LLMService:
     """
 
     def __init__(
-        self,
-        *,
-        model: str = GEMINI_MODEL,
-        api_key: str | None = None,
-        client: Any | None = None,
-    ) -> None:
+    self,
+    *,
+    model: str = "llama-3.3-70b-versatile",
+    api_key: str | None = None,
+    client: Any | None = None,
+) -> None:
         self.model = model
 
-        # Load project-level environment variables without overriding values
-        # already provided by the runtime environment.
+    # Load Groq API key
+    resolved_api_key = api_key or os.getenv("GROQ_API_KEY")
 
-        resolved_api_key = api_key or os.getenv(GEMINI_API_KEY_ENV)
-        if client is None and not resolved_api_key:
-            raise LLMConfigurationError(
-                f"Missing Gemini API key. Set {GEMINI_API_KEY_ENV} in the .env file."
-            )
+    if client is None and not resolved_api_key:
+        raise LLMConfigurationError(
+            "Missing Groq API key. Set GROQ_API_KEY in the .env file."
+        )
 
-        # Reuse one SDK client per service instance; request-specific data is
-        # passed only when generate_answer is called.
-        self.client = client or genai.Client(api_key=resolved_api_key)
+    # Initialize Groq client
+        self.client = client or Groq(
+        api_key=resolved_api_key
+    )
 
     def generate_answer(self, question: str, retrieved_chunks: list[dict]) -> dict:
         """Generate a concise grounded answer from retrieved chunks.
@@ -163,14 +164,16 @@ class LLMService:
             logger.info("PROMPT SENT TO GEMINI")
             logger.info(prompt)
 
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=1200,
-                ),
-            )
+            response = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
+    temperature=0.1,
+)
         except Exception as exc:
             logger.warning(
                 "Gemini generation failed, returning grounded fallback: %s",

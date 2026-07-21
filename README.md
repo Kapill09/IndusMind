@@ -210,31 +210,6 @@ The retrieval and generation pipeline is highly optimized for accuracy and relev
 
 ---
 
-## Screenshots
-
-### Home Screen
-![Home Screen](https://via.placeholder.com/800x450.png?text=Home+Screen)
-
-### Chat Interface
-![Chat Interface](https://via.placeholder.com/800x450.png?text=Chat+Interface)
-
-### Document Upload
-![Document Upload](https://via.placeholder.com/800x450.png?text=Document+Upload)
-
-### Knowledge Graph
-![Knowledge Graph](https://via.placeholder.com/800x450.png?text=Knowledge+Graph)
-
-### Context Graph
-![Context Graph](https://via.placeholder.com/800x450.png?text=Context+Graph)
-
-### Grounded Response
-![Grounded Response](https://via.placeholder.com/800x450.png?text=Grounded+Response)
-
-### AI Insights
-![AI Insights](https://via.placeholder.com/800x450.png?text=AI+Insights)
-
----
-
 ## Performance
 
 - **Low latency**: The pipeline utilizes semantic caching and optimized single-pass generation to deliver answers rapidly for repeated queries.
